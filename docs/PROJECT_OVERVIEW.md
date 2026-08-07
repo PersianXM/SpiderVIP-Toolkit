@@ -239,7 +239,7 @@ runtime و anti-brick را تضمین نمی‌کند.
 | `LIVE_DEVICE_FACTS.md` | حقایق `/proc` و block device زنده |
 | `STABILITY_AUDIT.md` | یافته‌ها و اولویت‌های پایداری |
 | `DEPLOYMENT_RESULT.md` | تغییرات و تأیید پس از reboot |
-| `NETWORK_ACCESS_GUIDE.md` | روش مشاهدهٔ امن‌تر و read-only |
+| `NETWORK_ACCESS_GUIDE.md` | Telnet زنده، IP/پورت‌ها، ابزارهای `telnet_*.py` |
 | `SCAN_ARCHITECTURE_REPORT.md` | جریان کامل scan و database |
 | `TRANSPONDER_PERSISTENCE_ROOTCAUSE.md` | persistence و WebIF |
 | `GADGET_SERVICE_ROOTCAUSE.md` | علت ریشه‌ای سرویس USB gadget |
