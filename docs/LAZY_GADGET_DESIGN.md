@@ -75,13 +75,42 @@ holder chain (از lsmod روی دستگاه زنده):
 4. **hookهای feature** — نقاطی که upgrade/PC-Link/recovery صدا می‌زنند، `gadgetctl up/down`
    را فرا بخوانند.
 
-## کارهای بازِ لازم پیش از پیاده‌سازیِ ایمن
-- **[بلاکر] یافتنِ نقطهٔ لودِ واقعیِ `g_service`** (لودرِ اختصاصیِ بوت؛ در `/etc` نیست).
-- **[بلاکر] تعیینِ قطعیِ منبع IRQ ~۳۱۳/s** (`g_service` یا `hi_dvb`) با یک تستِ کنترل‌شده،
-  تا هدفِ «کاهش IRQ» واقع‌بینانه بماند.
-- **مسیر بازگشت (rollback)** روی رسیورِ زنده، چون تغییرِ بوت سخت‑برگشت‌پذیر است.
+## نقطهٔ لود بوت (یافتهٔ ۲۰۲۶-۰۸-۰۸ — قطعی)
+
+```
+/etc/rcS.d/S01clap-loadmodules
+  -> /etc/init.d/clap-loadmodules
+  -> cd /lib/modules/4.4.176/extra/ && ./load
+
+داخل load (ASCII):
+  insmod udc-hisi.ko
+  insmod libcomposite.ko
+  insmod usb_f_service.ko
+  insmod g_service.ko      ← فقط این خط هدف lazy-boot است
+  insmod u_service.ko
+  insmod hi-dvb.ko
+```
+
+ابزار Telnet (بدون `rmmod` زنده) — بکاپ: `/data/load.g_service_bootctl.bak`
+
+```powershell
+python tools/g_service_bootctl.py status
+python tools/g_service_bootctl.py enable    # فقط برای بازیابی بوت
+# disable عمداً اینجا توصیه نمی‌شود — ببین هشدار پایین
+```
+
+> **هشدار ۲۰۲۶-۰۸-۰۸ (قطعی روی فریمور آزمایش):**  
+> `g_service_bootctl.py disable` + reboot روی این image به **گیر روی لوگوی بوت، ریموت مرده،
+> و بعداً خاموشی خودکار** منجر شد. `enable` بعداً از Telnet اعمال شد ولی بوت کامل
+> برنگشت و دستگاه به فلش فریمور نیاز پیدا کرد.  
+> **روی این فریمور `disable` نزنید.** ابزار را فقط برای `status` / `enable` (بازیابی)
+> نگه دارید. مسیر بعدی برای P10 نباید ترتیب بوت ماژول‌ها را دست بزند.
+
+## کارهای بازِ باقی‌مانده
+- تعیین منبع IRQ ~۳۱۳/s بدون دستکاری بوت (`g_service` در برابر `hi_dvb`/`u_service`).
+- طراحی lazy gadget که به `insmod` بوت وابسته نباشد (یا فقط روی image vendor جدید).
 
 ## جمع‌بندیِ صادقانه
-- بخشِ قابل‌حذف در idle **فقط `g_service`** است؛ بقیهٔ استک برای Live TV لازم است.
-- lazy-init برای `g_service` **شدنی و کم‌ریسک** است.
+- بخشِ ظاهراً قابل‌حذف در idle **فقط `g_service`** است؛ بقیهٔ استک برای Live TV لازم است.
+- فرض «lazy-boot کم‌ریسک است» روی این فریمور **رد شد** — حذف لود بوت می‌تواند UI را بکشد.
 - ادعای «کاهش IRQ / حذف wakeup» تا وقتی منبع IRQ قطعی نشود، **نباید تضمین شود**.
