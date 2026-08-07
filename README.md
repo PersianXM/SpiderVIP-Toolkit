@@ -1,7 +1,8 @@
 # SpiderVIP Firmware Patch
 
 مجموعهٔ مستندات، ابزارهای تحلیل و patchهای برگشت‌پذیر برای فریمویر
-`Spider VIP v1.00.92` روی پلتفرم `HiSilicon Hi3798MV300`.
+`Spider VIP v1.00.92` روی پلتفرم `HiSilicon Hi3798MV300`، به‌همراه ابزار عیب‌یابی
+فریز تصویر/صدا و forensic ماندگار قبل از قطع برق.
 
 > این مخزن فریمویر رسمی یا image آمادهٔ فلش را توزیع نمی‌کند. فایل‌های حجیم،
 > rootfs استخراج‌شده و ابزارهای vendor عمداً از Git حذف شده‌اند. استفاده از هر
@@ -19,17 +20,17 @@
 - نسخهٔ سفارشی مستقرشده: `1.00.93`
 - روش موفق استقرار: تغییر مستقیم و برگشت‌پذیر از طریق Telnet؛ نه بازسازی و فلش
   کامل container
+- دسترسی آزمایشگاهی: Telnet `192.168.100.102:23` — SSH معمولاً بسته است
 
-جزئیات، حدود قطعیت داده‌ها و نقشهٔ مخزن در
-[نمای کلی فنی پروژه](docs/PROJECT_OVERVIEW.md) ثبت شده است.
+جزئیات در [نمای کلی فنی پروژه](docs/PROJECT_OVERVIEW.md). برای پورت پچ‌ها به
+**فریمور جدید بعد از ارتقا**:
+[راهنمای پورت پچ و forensic](docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md).
 
 ## یافته‌های اصلی
 
 1. container اختصاصی `.mupg` شامل ۱۰ پارتیشن است؛ `rootfs` مهم‌ترین بخش برای
    تحلیل برنامه و تنظیمات دستگاه است.
-2. برنامهٔ اصلی UI/گیرنده، باینری بسته و strip‌شدهٔ `/usr/bin/bianbiang` است؛
-   بنابراین ادعای قطعی دربارهٔ memory leak داخلی بدون تحلیل باینری یا telemetry
-   زنده ممکن نیست.
+2. برنامهٔ اصلی UI/گیرنده، باینری بسته و strip‌شدهٔ `/usr/bin/bianbiang` است.
 3. نبود respawn برای برنامهٔ اصلی و نبود supervision برای سرویس‌های کمکی،
    crash یا OOM را به صفحهٔ سیاه دائمی تبدیل می‌کرد.
 4. patchهای `bianbiang.sh` و `sysctl.conf` برای recovery، نظارت سرویس‌ها و
@@ -37,54 +38,73 @@
 5. تغییرات مستقیم روی دستگاه، نسخهٔ `1.00.93` و تنظیمات پایداری پس از reboot
    باقی مانده‌اند.
 6. پایگاه اصلی فرکانس‌ها `/data/gx/live_prog` است؛ `satellites.xml` عمدتاً
-   export متنی آن است و با WebIF می‌توان تغییرات را به پایگاه اصلی commit کرد.
+   export متنی آن است.
+7. فریز A/V اغلب با reboot نرم برنمی‌گردد؛ قطع برق شواهد runtime را پاک می‌کند —
+   قبلش باید forensic روی `/data/freeze_snap` گرفته شود.
+8. مسیر USB gadget (`dwc_otg` / `u_service`) مظنون بار پایدار است؛ `rmmod g_service`
+   روی این سخت‌افزار ممنوع است.
 
 ## ساختار مخزن
 
 ```text
 docs/       گزارش‌های فنی، شواهد زنده، طراحی‌ها و نتایج استقرار
 patches/    فایل‌های قابل استقرار روی rootfs با حفظ مسیر مقصد
-tools/      ابزارهای Python برای تحلیل، استخراج، build، verify و deployment
-build/      فقط راهنمای build؛ خروجی‌های تولیدشده در Git نگهداری نمی‌شوند
-frequencies.txt  دادهٔ نمونهٔ فرکانس‌های استخراج‌شده
+tools/      ابزارهای Python برای تحلیل، استخراج، Telnet، forensic و deployment
+spidervip/  ابزار CLI عیب‌یابی/تعمیر فریز A/V (شبیه‌ساز + بک‌اند SSH اختیاری)
+build/      خروجی‌های محلی؛ در Git نگهداری نمی‌شوند
 ```
 
-پوشه‌های محلی `extracted/` و بیشتر محتوای `build/` ورودی/خروجی تولیدشده‌اند و
-طبق `.gitignore` منتشر نمی‌شوند.
-
-## شروع سریع
-
-ابزارها عمدتاً با Python 3 اجرا می‌شوند. scraper علاوه بر کتابخانهٔ استاندارد
-به `requests` و `beautifulsoup4` نیاز دارد:
+## شروع سریع — دسترسی و forensic
 
 ```powershell
-python -m pip install requests beautifulsoup4
+python tools/telnet_probe.py
+python tools/deploy_freeze_watch.py
+python tools/freeze_capture.py    # وقتی فریز دیدید؛ قبل از قطع برق
+python tools/freeze_pull.py       # بعد از روشن شدن مجدد
+```
+
+راهنما: [دسترسی شبکه](docs/NETWORK_ACCESS_GUIDE.md) ·
+[عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) ·
+[عیب‌یابی فریز (EN)](docs/troubleshooting-en.md)
+
+## شروع سریع — پچ پایداری روی باکس
+
+ابزارهای تحلیل image و استقرار تاریخی عمدتاً با Python 3 اجرا می‌شوند. پیش از هر
+deployment روی دستگاه واقعی backup بگیرید و IP/مسیر مقصد را تأیید کنید. جزئیات
+استقرار موفق: [نتیجهٔ استقرار](docs/DEPLOYMENT_RESULT.md).
+
+```powershell
 python tools/test_lyngsat_parse.py
 python tools/test_gadget_fsm.py
 ```
 
-برای تحلیل یک image که به‌صورت محلی و قانونی تهیه شده است:
+## ابزار `spidervip` (اختیاری)
 
-```powershell
-python tools/analyze_header.py
-python tools/extract_partitions.py
-python tools/unpack_rootfs.py
+عیب‌یابی اولویت‌دار فریز A/V با شبیه‌ساز یا SSH (روی باکس آزمایش فعلی Telnet است، نه SSH):
+
+```bash
+pip install -e ".[online,dev]"
+spidervip diagnose --simulate --fault player-crash
+spidervip repair   --simulate --fault demux-stuck --fault audio-muted
+pytest -q
 ```
-
-برخی ابزارهای قدیمی مسیر یا نام فایل را در خود اسکریپت فرض می‌کنند؛ پیش از اجرا
-ورودی‌ها را بررسی کنید. هیچ ابزار deployment را بدون backup و تأیید IP/مسیرهای
-مقصد روی دستگاه اجرا نکنید.
 
 ## فهرست مستندات
 
 ### مبانی فریمویر و دستگاه
 
-- [نمای کلی پروژه و حدود شواهد](docs/PROJECT_OVERVIEW.md)
+- [نمای کلی پروژه](docs/PROJECT_OVERVIEW.md)
+- [راهنمای پورت پچ به فریمور جدید](docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)
 - [ساختار container و پارتیشن‌ها](docs/STRUCTURE_AND_ANALYSIS.md)
 - [اطلاعات قطعی دستگاه زنده](docs/LIVE_DEVICE_FACTS.md)
 - [ممیزی پایداری](docs/STABILITY_AUDIT.md)
 - [نتیجهٔ استقرار](docs/DEPLOYMENT_RESULT.md)
 - [راهنمای دسترسی شبکه‌ای](docs/NETWORK_ACCESS_GUIDE.md)
+
+### فریز A/V و forensic
+
+- [عیب‌یابی فارسی](docs/troubleshooting-fa.md)
+- [عیب‌یابی انگلیسی](docs/troubleshooting-en.md)
 
 ### اسکن و پایگاه فرکانس
 

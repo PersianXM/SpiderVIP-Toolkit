@@ -137,6 +137,9 @@ python tools/freeze_pull.py           # بعد از روشن‌شدن مجدد
 
 جزئیات در [`troubleshooting-fa.md`](troubleshooting-fa.md).
 
+پس از ارتقای فریمور vendor، قبل از کپی دوبارهٔ پچ‌ها چک‌لیست
+[`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) را طی کنید.
+
 ### نکات عملی Telnet روی این باکس
 
 - اسلات نشست محدود است؛ **هم‌زمان چند session باز نگذارید**.
