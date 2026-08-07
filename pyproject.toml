@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spidervip-firmware-patch"
+version = "0.1.0"
+description = "Diagnose and remotely repair the SpiderVIP satellite receiver audio/video freeze fault"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+online = ["paramiko>=3.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+spidervip = "spidervip.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["spidervip*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
