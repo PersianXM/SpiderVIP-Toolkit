@@ -43,7 +43,7 @@
 | **P7** | نبود respawn برای `bianbiang` | ISSUE-001: `inittab once` + نبود حلقه → هر crash = سیاه دائمی تا قطع برق | پچ `bianbiang.sh` با حلقهٔ نظارت (نسخهٔ ۱.۰۰.۹۳) | بله (استقرار پچ) |
 | **P8** | مرگ سرویس‌های کمکی بدون restart | ISSUE-002: `streamrelay` / `satipclient` / `app_console` | supervision سبک در `bianbiang.sh` | بله (استقرار پچ) |
 | **P9** | OOM / فشار حافظه در uptime طولانی | ISSUE-003: min_free پایین، dirty بالا؛ مسیر به OOM-kill اپ | sysctl محافظه‌کارتر + zram در صورت نیاز | بله (استقرار پچ) |
-| **P10** | طوفان وقفهٔ USB gadget / `gservice` TS | freeze ۲۰۲۶-۰۷-۱۱: load≈۱۴، CPU بیکار، بن‌بست VDEC/VPSS/شبکه | غیرفعال کردن PC-Link/PVR-over-USB؛ در صورت نیاز ری‌استارت کنترل‌شدهٔ gadget | نیمه‌خودکار |
+| **P10** | طوفان وقفهٔ USB gadget / مسیر `u_service`+`dwc_otg` | freeze ۲۰۲۶-۰۷-۱۱ و forensic ۲۰۲۶-۰۸-۰۷: load≈۱۴، CPU بیکار. روی این فریمور منوی PC-Link/استریم TS **وجود ندارد**؛ USB منو فقط ضبط/بکاپ/آپدیت میزبان است | forensic بگیر؛ `rmmod g_service` ممنوع؛ کاهش ساختاری فقط با کار مهندسی gadget (نه تیک منو) | خیر (منو ندارد) |
 | **P11** | بن‌بست زنجیرهٔ HiSilicon (VDEC/VPSS/win/sync) | شمارنده‌ها جلو نمی‌روند؛ `sync=STOP`؛ نودهای `vdec`/`win` غایب | ری‌استارت A/V؛ در حالت شدید reboot نرم | بله |
 | **P12** | خطای حمل TS در demux (TEI/CC) یا frontend بدون lock | demux فعال ولی جریان خراب/خالی | سیگنال فیزیکی + در صورت نیاز ریست demux | ترکیبی |
 | **P13** | پایگاه کانال خراب (`live_prog` / PID اشتباه) | بعد از اسکن ناقص یا ناهماهنگی با `satellites.xml` | اصلاح/بازسازی دیتابیس؛ commit از WebIF | دستی |
@@ -75,8 +75,10 @@
    غیر از `0x1fff` شود.
 3. **اگر هنوز STOP بود — demux/PID (P2):** ریست demux و زپینگ دوباره به همان کانال.
 4. **لایهٔ ویدیو / unmute (P3)** و در صورت نیاز خروجی امن HDMI (P4).
-5. **USB gadget (P10):** اگر `load average` حدود ۱۴ ماند و در `dmesg` طوفان
-   `service gadget` دیدید، PC-Link / استریم TS روی USB را در منو خاموش کنید.
+5. **USB gadget (P10):** روی این تصویر منوی PC-Link نیست؛ اگر `load≈14` و طوفان
+   `dwc_otg`/`service gadget` دیدید فقط forensic بگیرید — خاموش‌کردن «USB ضبط/بکاپ/آپدیت»
+   در منو این بار را کم نمی‌کند. جزئیات:
+   [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) بخش P10.
 6. **سیگنال و CAS (P5/P6):** فقط اگر بعد از برگشت `avplay` به RUN هنوز تصویر/صدا نبود.
 7. **آخرین راه نرم:** reboot از راه دور (`reboot`)؛ فلش `.mupg` لازم نیست مگر پچ
    معیوب شناخته‌شده باشد.
@@ -124,6 +126,11 @@ python tools/freeze_pull.py --list   # فهرست روی باکس
 
 محتوای هر اسنپ‌شات: `avplay`/`sync`/`irq`/`ps`/`dmesg`/`db_stat`/`SUMMARY.txt` و برچسب‌هایی
 مثل `AV_STOP`, `NO_VDEC`, `USB_IRQ_STORM_SUSPECT`, `DB_DISK_OK`.
+
+برای پورت کل راه‌حل به فریمور ارتقایافته و محدودیت‌های P10 (چرا از Telnet نمی‌شود
+PC-Link را خاموش کرد / ممنوعیت `rmmod g_service`):
+
+- [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)
 
 ## رفع از طریق اتصال آنلاین به رسیور
 

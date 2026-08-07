@@ -129,6 +129,10 @@ patchهای متناظر:
 این نتیجه، موفقیت **استقرار مستقیم فایل‌ها** را تأیید می‌کند و به معنی
 تأیید امن‌بودن flash کامل `.mupg` بازسازی‌شده نیست.
 
+برای پورت همین پچ‌ها و forensic به **نسخهٔ بالاتر فریمور** بعد از ارتقا، چک‌لیست و
+درس‌های عملی در
+[`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) است.
+
 ## ۵. ساختار قابل انتشار مخزن
 
 ### `docs/`
@@ -155,6 +159,7 @@ patchهای متناظر:
 - `build_custom_mupg.py`, `verify_custom.py`
 - `probe_checksum*.py`, `crack_checksum.py`
 - `telnet_probe.py`, `telnet_run.py` و ابزارهای deployment
+- `freeze_capture.py`, `freeze_pull.py`, `deploy_freeze_watch.py` (forensic فریز روی `/data`)
 - scraper و generator داده‌های transponder
 - تست‌های `test_lyngsat_parse.py` و `test_gadget_fsm.py`
 
@@ -240,6 +245,8 @@ runtime و anti-brick را تضمین نمی‌کند.
 | `STABILITY_AUDIT.md` | یافته‌ها و اولویت‌های پایداری |
 | `DEPLOYMENT_RESULT.md` | تغییرات و تأیید پس از reboot |
 | `NETWORK_ACCESS_GUIDE.md` | Telnet زنده، IP/پورت‌ها، ابزارهای `telnet_*.py` |
+| `FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md` | پورت پچ/forensic به فریمور جدید؛ درس‌های فریز و P10 |
+| `troubleshooting-fa.md` / `troubleshooting-en.md` | فریز A/V، جدول P1–P14، forensic قبل از قطع برق |
 | `SCAN_ARCHITECTURE_REPORT.md` | جریان کامل scan و database |
 | `TRANSPONDER_PERSISTENCE_ROOTCAUSE.md` | persistence و WebIF |
 | `GADGET_SERVICE_ROOTCAUSE.md` | علت ریشه‌ای سرویس USB gadget |

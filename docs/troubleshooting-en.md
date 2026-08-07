@@ -43,7 +43,7 @@ P7+ if needed.
 | **P7** | No respawn for `bianbiang` | ISSUE-001: `inittab once` + no loop → any crash = permanent black screen | Supervised loop in `bianbiang.sh` (v1.00.93) | Yes (deploy patch) |
 | **P8** | Helper services die without restart | ISSUE-002: `streamrelay` / `satipclient` / `app_console` | Light supervision in `bianbiang.sh` | Yes (deploy patch) |
 | **P9** | OOM / memory pressure on long uptime | ISSUE-003: low `min_free`, high dirty → OOM-kill of the app | Safer sysctl + zram if needed | Yes (deploy patch) |
-| **P10** | USB gadget / `gservice` TS IRQ storm | Freeze 2026-07-11: load≈14, idle CPU, VDEC/VPSS/network stall | Disable PC-Link/PVR-over-USB; controlled gadget restart | Semi |
+| **P10** | USB gadget / `u_service`+`dwc_otg` IRQ storm | Freeze 2026-07-11 and forensics 2026-08-07: load≈14, idle CPU. This firmware has **no** PC-Link / USB-TS menu; USB settings are only host record/backup/update | Capture forensics; never `rmmod g_service`; structural gadget work only (not a menu toggle) | No (no menu) |
 | **P11** | HiSilicon chain stall (VDEC/VPSS/win/sync) | Counters frozen; `sync=STOP`; missing `vdec`/`win` nodes | A/V restart; soft reboot if stuck | Yes |
 | **P12** | TS transport errors or unlocked frontend | Demux up but stream empty/corrupt | Physical signal + demux reset | Mixed |
 | **P13** | Corrupt channel DB (`live_prog` / bad PIDs) | After incomplete scan or `satellites.xml` mismatch | Repair DB; commit via WebIF | Manual |
@@ -74,8 +74,10 @@ Low risk → higher risk; **no full flash**:
    `CurStatus` should not be STOP and the video PID should not be `0x1fff`.
 3. **Still STOP — demux/PIDs (P2):** reset demux and zap the same channel again.
 4. **Video plane / unmute (P3)**, then safe HDMI modes (P4) if needed.
-5. **USB gadget (P10):** if load stays ~14 and `dmesg` shows a `service gadget`
-   storm, disable PC-Link / USB TS streaming in the menu.
+5. **USB gadget (P10):** this image has no PC-Link menu. If load stays ~14 with a
+   `dwc_otg` / `service gadget` storm, capture forensics only — toggling host
+   USB record/backup/update settings will not clear that load. See
+   [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md).
 6. **Signal / CAS (P5/P6):** only after `avplay` is RUN again but A/V is still dead.
 7. **Last soft step:** remote `reboot`. A full `.mupg` flash is not required unless
    a known-bad patch is installed.
@@ -124,6 +126,11 @@ python tools/freeze_pull.py --list
 
 Each snapshot includes `avplay`/`sync`/`irq`/`ps`/`dmesg`/`db_stat`/`SUMMARY.txt`
 with tags such as `AV_STOP`, `NO_VDEC`, `USB_IRQ_STORM_SUSPECT`, `DB_DISK_OK`.
+
+To re-apply patches after a vendor firmware upgrade, and for P10 limits (no Telnet
+PC-Link key; never `rmmod g_service`):
+
+- [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)
 
 ## Repair over the online connection
 
