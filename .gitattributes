@@ -1,0 +1,12 @@
+* text=auto
+
+# Files deployed to Linux firmware must retain LF line endings.
+*.sh text eol=lf
+*.py text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+Makefile text eol=lf
+
+# Keep documentation consistent across platforms.
+*.md text eol=lf
+*.txt text eol=lf

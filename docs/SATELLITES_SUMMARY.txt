@@ -1,0 +1,234 @@
+Spider VIP firmware — Satellites summary
+Source: /usr/local/default/default_data.xml
+Total satellites : 227
+Total transponders: 6824
+==================================================
+     POS  COUNT       SATELLITE
+--------------------------------------------------
+    7.0W    76 TP   7.0W Nilesat 201 & Eutelsat 7 West A
+   26.0E    97 TP   26.0E Ku-band Badr 4/5/6/7 & Eshail 2
+   26.1E     2 TP   26.0E C-band Badr 4/5/6/7 & Eshail 2
+   13.0E    96 TP   13.0E Hotbird 13B/13C/13E
+   19.2E   100 TP   19.2E Ku-band Astra 1KR/1L/1M/1N
+   23.5E   118 TP   23.5E Astra 3B
+   30.0W    97 TP   30.0W Hispasat 30W-5/30W-6
+   27.5W     2 TP   27.5W Ku-band Intelsat 901
+   27.6W    26 TP   27.5W C-band Intelsat 901
+   16.0E   145 TP   16.0E Ku-band Eutelsat 16A
+   16.2E    15 TP   16.0E Ka-band Eutelsat 16A
+    9.0E    42 TP   9.0E Ku-band Eutelsat 9B & Ka-Sat 9A
+    9.2E     1 TP   9.0E Ka-band Eutelsat 9B & Ka-Sat 9A
+    5.1W    10 TP   5.0W C-band Eutelsat 5 West A/B
+    5.0W    70 TP   5.0W Ku-band Eutelsat 5 West A/B
+    4.8E    96 TP   4.9E Ku-band Astra 4A & SES 5
+    4.9E    20 TP   4.9E C-band Astra 4A & SES 5
+    5.0E     2 TP   4.9E Ka-band Astra 4A & SES 5
+    0.9W     5 TP   0.8W C-band Thor 5/6/7 & Intelsat 10-02
+    0.8W   130 TP   0.8W Ku-band Thor 5/6/7 & Intelsat 10-02
+  177.1W     7 TP   177.0W C-band NSS 9
+   19.4E    31 TP   19.2E Ka-band Astra 1KR/1L/1M/1N
+  139.1W     1 TP   139.0W C-band AMC 8
+  133.1W    17 TP   133.0W C-band Galaxy 15
+  131.1W    13 TP   131.0W C-band AMC 11
+  129.0W    42 TP   129.0W Ciel 2
+  127.1W    15 TP   127.0W C-band Galaxy 13/Horizons 1
+  127.0W     5 TP   127.0W Ku-band Galaxy 13/Horizons 1
+  125.1W    23 TP   125.0W C-band AMC 21 & Galaxy 14
+  125.0W     6 TP   125.0W Ku-band AMC 21 & Galaxy 14
+  123.1W     4 TP   123.0W C-band Galaxy 18
+  123.0W     5 TP   123.0W Ku-band Galaxy 18
+  121.1W    10 TP   121.0W C-band EchoStar 9/Galaxy 23
+  121.0W     8 TP   121.0W Ku-band EchoStar 9/Galaxy 23
+  119.1W     2 TP   119.0W C-band Anik F3 & EchoStar 14 & DirecTV 7S
+  119.0W    58 TP   119.0W Ku-band Anik F3 & EchoStar 14 & DirecTV 7S
+  117.1W    39 TP   117.0W C-band Eutelsat 117 West A/B
+  117.0W    12 TP   117.0W Ku-band Eutelsat 117 West A/B
+  115.0W     1 TP   114.9W C-band Eutelsat 115 West B
+  114.9W     1 TP   114.9W Ku-band Eutelsat 115 West B
+  113.1W    40 TP   113.0W C-band Eutelsat 113 West A
+  113.0W    13 TP   113.0W Ku-band Eutelsat 113 West A
+  111.3W     7 TP   111.1W Ka-band Anik F2
+  111.2W     1 TP   111.1W C-band Anik F2
+  111.1W    22 TP   111.1W Ku-band Anik F2
+  110.0W    39 TP   110.0W DirecTV 5 & EchoStar 10/11
+  107.4W    10 TP   107.3W C-band Anik F1R/G1
+  107.3W    25 TP   107.3W Ku-band Anik F1R/G1
+  105.1W    21 TP   105.0W C-band AMC 15 & EchoStar 105/SES 11
+  105.0W    23 TP   105.0W Ku-band AMC 15 & EchoStar 105/SES 11
+  103.2W    17 TP   103.0W Ka-band DirecTV 10/12 & SES 3
+  103.1W    24 TP   103.0W C-band DirecTV 10/12 & SES 3
+  103.0W    14 TP   103.0W Ku-band DirecTV 10/12 & SES 3
+  101.1W    27 TP   101.0W C-band SES 1 & DirecTV 8/9S
+  101.0W     2 TP   101.0W Ku-band SES 1 & DirecTV 8/9S
+   99.3W    21 TP   99.2W C-band Galaxy 16 & DirecTV 11/14
+   99.2W    39 TP   99.2W Ku-band Galaxy 16 & DirecTV 11/14
+   97.1W    25 TP   97.0W C-band Galaxy 19
+   97.0W    14 TP   97.0W Ku-band Galaxy 19
+   95.1W    32 TP   95.0W C-band Galaxy 3C & Spaceway 3 & Intelsat 30/31
+   95.0W     3 TP   95.0W Ku-band Galaxy 3C & Spaceway 3 & Intelsat 30/31
+   91.1W    24 TP   91.0W C-band Galaxy 17 & Nimiq 6
+   91.0W    61 TP   91.0W Ku-band Galaxy 17 & Nimiq 6
+   89.1W    16 TP   89.0W C-band Galaxy 28
+   89.0W    44 TP   89.0W Ku-band Galaxy 28
+   87.2W     8 TP   87.1W C-band SES 2 & TKSat 1
+   87.1W    21 TP   87.1W Ku-band SES 2 & TKSat 1
+   84.1W    10 TP   84.0W C-band Star One D1
+   82.0W    31 TP   82.0W Nimiq 4
+   81.1W     1 TP   81.0W C-band Arsat 2
+   81.0W     6 TP   81.0W Ku-band Arsat 2
+   78.8W    20 TP   78.8W Sky Mexico 1
+   77.0W    32 TP   77.0W QuetzSat 1
+   75.1W    69 TP   75.0W C-band Star One C3
+   75.0W     1 TP   75.0W Ku-band Star One C3
+   73.9W     3 TP   73.9W Hispasat 74W-1
+   72.7W    25 TP   72.7W Nimiq 5
+   71.8W    73 TP   71.8W Arsat 1
+   70.1W    62 TP   70.0W C-band Star One C2/C4
+   70.0W    23 TP   70.0W Ku-band Star One C2/C4
+   67.0W     3 TP   67.0W SES 10
+   65.1W    23 TP   65.0W C-band Star One C1 & Eutelsat 65 West A
+   65.0W     1 TP   65.0W Ku-band Star One C1 & Eutelsat 65 West A
+   63.0W    19 TP   63.0W Telstar 14R
+   61.5W    36 TP   61.5W EchoStar 16
+   61.1W    13 TP   61.0W C-band Amazonas 2/3/5
+   61.0W    47 TP   61.0W Ku-band Amazonas 2/3/5
+   58.1W    41 TP   58.0W C-band Intelsat 21
+   58.0W    20 TP   58.0W Ku-band Intelsat 21
+   55.6W    70 TP   55.5W C-band Intelsat 34
+   53.1W     3 TP   53.0W C-band Intelsat 23
+   53.0W     2 TP   53.0W Ku-band Intelsat 23
+   47.6W    43 TP   47.5W C-band SES 14
+   45.1W    33 TP   45.0W C-band Intelsat 14
+   45.0W     5 TP   45.0W Ku-band Intelsat 14
+   43.2W    47 TP   43.1W C-band Intelsat 11 & Sky Brasil 1
+   43.1W    21 TP   43.1W Ku-band Intelsat 11 & Sky Brasil 1
+   40.6W    66 TP   40.5W C-band SES 6
+   40.5W    36 TP   40.5W Ku-band SES 6
+   37.6W     8 TP   37.5W C-band NSS 10 & Telstar 11N
+   37.5W    35 TP   37.5W Ku-band NSS 10 & Telstar 11N
+   34.6W     2 TP   34.5W C-band Intelsat 35e
+   34.5W     3 TP   34.5W Ku-band Intelsat 35e
+   31.6W     1 TP   31.5W C-band Intelsat 25
+   31.5W     2 TP   31.5W Ku-band Intelsat 25
+   24.6W     8 TP   24.5W C-band Intelsat 905 & Alcomsat 1
+   24.5W    87 TP   24.5W Ku-band Intelsat 905 & Alcomsat 1
+   22.1W    32 TP   22.0W C-band SES 4
+   22.0W    50 TP   22.0W Ku-band SES 4
+   20.1W     2 TP   20.0W C-band NSS 7
+   20.0W     7 TP   20.0W Ku-band NSS 7
+   18.1W    13 TP   18.0W C-band Intelsat 37e
+   18.0W     1 TP   18.0W Ku-band Intelsat 37e
+   15.0W    22 TP   15.0W Telstar 12 Vantage
+   14.0W     7 TP   14.0W Express AM8
+   12.7W     1 TP   12.5W Ka-band Eutelsat 12 West B & WGS 3
+   12.5W    77 TP   12.5W Ku-band Eutelsat 12 West B & WGS 3
+   11.1W     2 TP   11.0W C-band Express AM44
+   11.0W    37 TP   11.0W Ku-band Express AM44
+    8.1W    27 TP   8.0W C-band Eutelsat 8 West B
+    8.0W    67 TP   8.0W Ku-band Eutelsat 8 West B
+    4.0W    47 TP   4.0W Amos 3/7
+    3.1W    12 TP   3.0W C-band ABS 3A
+    3.0W    61 TP   3.0W Ku-band ABS 3A
+    1.9E     4 TP   1.9E BulgariaSat 1
+    3.0E   102 TP   3.0E Ku-band Eutelsat 3B & Rascom QAF 1R
+    3.1E    23 TP   3.0E C-band Eutelsat 3B & Rascom QAF 1R
+    7.0E   134 TP   7.0E Ku-band Eutelsat 7B/7C
+    7.2E    11 TP   7.0E Ka-band Eutelsat 7B/7C
+   10.0E   225 TP   10.0E Ku-band Eutelsat 10A
+   10.1E    27 TP   10.0E C-band Eutelsat 10A
+   17.0E     6 TP   17.0E Amos 17
+   20.1E    11 TP   20.0E C-band Arabsat 5C
+   21.6E   135 TP   21.6E Eutelsat 21B
+   25.5E    13 TP   25.5E Ku-band Eshail 1
+   28.2E   130 TP   28.2E Astra 2E/2F/2G
+   30.5E    69 TP   30.5E Ku-band Arabsat 5A/6A
+   30.6E     8 TP   30.5E C-band Arabsat 5A/6A
+   31.5E    14 TP   31.5E Astra 5B
+   33.0E    41 TP   33.0E Eutelsat 33E & Intelsat 28
+   36.0E   133 TP   36.0E Eutelsat 36B & Express AMU1
+   38.0E    16 TP   38.0E Ku-band Paksat 1R
+   38.1E    50 TP   38.0E C-band Paksat 1R
+   39.0E    60 TP   39.0E Hellas Sat 3/4
+   40.0E     6 TP   40.0E Ku-band Express AM7
+   40.1E   113 TP   40.0E C-band Express AM7
+   42.0E   166 TP   42.0E Ku-band Türksat 3A/4A
+   42.5E     2 TP   42.5E Ku-band NigComSat 1R
+   42.6E     1 TP   42.5E C-band NigComSat 1R
+   45.0E    17 TP   45.0E AzerSpace 2/Intelsat 38
+   46.0E    38 TP   46.0E Ku-band AzerSpace 1/Africasat 1a
+   46.1E    37 TP   46.0E C-band AzerSpace 1/Africasat 1a
+   47.5E    23 TP   47.5E Intelsat 10
+   49.1E     4 TP   49.0E C-band Yamal 601
+   52.0E    19 TP   52.0E TurkmenÄlem/MonacoSat
+   52.5E    13 TP   52.5E Al Yah 1
+   53.0E    42 TP   53.0E Ku-band Express AM6
+   53.1E    30 TP   53.0E C-band Express AM6
+   54.9E    42 TP   54.9E Ku-band G-Sat 8/16 & Yamal 402
+   56.0E    24 TP   56.0E Express
+   57.0E    34 TP   57.0E Ku-band NSS 12
+   57.1E    18 TP   57.0E C-band NSS 12
+   58.5E    12 TP   58.5E KazSat 3
+   60.0E     7 TP   60.0E Ku-band Intelsat 33e
+   60.1E     8 TP   60.0E C-band Intelsat 33e
+   62.0E    22 TP   62.0E Ku-band Intelsat 39
+   62.1E     5 TP   62.0E C-band Intelsat 39
+   64.2E     5 TP   64.2E Ku-band Intelsat 906
+   64.3E     9 TP   64.2E C-band Intelsat 906
+   65.0E    10 TP   65.0E Amos 4
+   66.0E    18 TP   66.0E Ku-band Intelsat 17
+   66.1E    16 TP   66.0E C-band Intelsat 17
+   68.5E    60 TP   68.5E Ku-band Intelsat 20/36
+   68.6E    57 TP   68.5E C-band Intelsat 20/36
+   70.5E    27 TP   70.5E Eutelsat 70B
+   75.0E    26 TP   75.0E Ku-band ABS 2/2A
+   75.1E    28 TP   75.0E C-band ABS 2/2A
+   76.6E    37 TP   76.5E C-band Apstar 7
+   83.0E    24 TP   83.0E Ku-band G-Sat 10/30/31
+   83.1E    43 TP   83.0E C-band G-Sat 10/30/31
+   85.0E    31 TP   85.0E Horizons 2 & Intelsat 15
+   86.5E    20 TP   86.5E KazSat 2
+   87.6E    27 TP   87.5E C-band ChinaSat 12
+   88.0E    19 TP   88.0E Ku-band ST 2
+   90.0E    28 TP   90.0E Ku-band Yamal 401
+   90.1E    49 TP   90.0E C-band Yamal 401
+   91.6E    55 TP   91.5E C-band Measat 3/3a/3b
+   93.5E    19 TP   93.5E Ku-band G-Sat 15/17
+   93.6E    50 TP   93.5E C-band G-Sat 15/17
+   95.0E    12 TP   95.0E SES 8
+   96.5E     8 TP   96.5E Ku-band Express AM33
+   96.6E     3 TP   96.5E C-band Express AM33
+  100.5E    24 TP   100.5E Ku-band AsiaSat 5
+  100.6E    57 TP   100.5E C-band AsiaSat 5
+  105.6E    44 TP   105.5E C-band AsiaSat 7
+  108.2E    31 TP   108.2E Ku-band SES 7/9 & Telkom 4
+  108.3E    27 TP   108.2E C-band SES 7/9 & Telkom 4
+  113.0E    22 TP   113.0E Ku-band Koreasat 5/5A & Palapa D
+  113.1E    54 TP   113.0E C-band Koreasat 5/5A & Palapa D
+  115.6E    43 TP   115.5E C-band ChinaSat 6B
+  116.0E    35 TP   116.0E ABS 7 & Koreasat 6/7
+  119.3E    14 TP   119.3E Thaicom 4 & Bangabandhu 1
+  120.1E     7 TP   120.0E C-band AsiaSat 6/Thaicom 7
+  122.0E     2 TP   122.0E Ku-band AsiaSat 9
+  122.1E    10 TP   122.0E C-band AsiaSat 9
+  124.0E    24 TP   124.0E JCSAT 4B
+  125.1E    38 TP   125.0E C-band ChinaSat 6A
+  132.0E    20 TP   132.0E Ku-band JCSAT 5A & Vinasat 1/2
+  132.1E     7 TP   132.0E C-band JCSAT 5A & Vinasat 1/2
+  134.0E     6 TP   134.0E Ku-band Apstar 6C
+  134.1E    15 TP   134.0E C-band Apstar 6C
+  138.0E    11 TP   138.0E Ku-band Telstar 18 Vantage
+  138.1E    19 TP   138.0E C-band Telstar 18 Vantage
+  140.0E    16 TP   140.0E Ku-band Express AM5/AT2
+  140.1E    13 TP   140.0E C-band Express AM5/AT2
+  144.0E    12 TP   144.0E Superbird C2
+  152.0E    16 TP   152.0E Optus D2
+  154.0E    13 TP   154.0E Ku-band JCSAT 2B
+  156.0E    36 TP   156.0E Optus D3/10
+  159.0E     1 TP   159.0E Ku-band ABS 6
+  159.1E     4 TP   159.0E C-band ABS 6
+  160.0E    33 TP   160.0E Optus D1
+  166.0E    16 TP   166.0E Ku-band Intelsat 19
+  166.1E    27 TP   166.0E C-band Intelsat 19
+  169.0E     4 TP   169.0E Horizons 3e
+  172.0E     4 TP   172.0E Ku-band Eutelsat 172B
+  172.1E     4 TP   172.0E C-band Eutelsat 172B

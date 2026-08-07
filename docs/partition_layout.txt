@@ -1,0 +1,16 @@
+Spider VIP - Decoded Partition Table
+File: F:\Satelite\Spider VIP\SPIDER-VIP_v1.00.92_20260507.mupg  (530,280,116 bytes)
+Table @ 0x805, entry size 36, count 10
+
+ #  name            part_size      img_len      flash_off      flags
+----------------------------------------------------------------------------
+ 0  fastboot     0x00100000 0x000EB800 0x0000000000 0x01000000  # 1.0MB part / 942.0KB data @ flash 0x0
+ 1  bootargs     0x00100000 0x00010000 0x0000100000 0x01000000  # 1.0MB part / 64.0KB data @ flash 0x100000
+ 2  baseparam    0x00100000 0x000016AC 0x0000200000 0x01000000  # 1.0MB part / 5.7KB data @ flash 0x200000
+ 3  pqparam      0x00100000 0x0002A83C 0x0000300000 0x01000000  # 1.0MB part / 170.1KB data @ flash 0x300000
+ 4  logo         0x00100000 0x00096000 0x0000400000 0x01000000  # 1.0MB part / 600.0KB data @ flash 0x400000
+ 5  deviceinfo   0x00100000 0x00000400 0x0000500000 0x01000000  # 1.0MB part / 1.0KB data @ flash 0x500000
+ 6  loader       0x02000000 0x00A8C8BB 0x0000600000 0x01000000  # 32.0MB part / 10.5MB data @ flash 0x600000
+ 7  kernel       0x01A00000 0x005F3BF3 0x0002600000 0x01000000  # 26.0MB part / 6.0MB data @ flash 0x2600000
+ 8  rootfs       0x49000000 0x1D5699FC 0x0004000000 0x010FD868  # 1.1GB part / 469.4MB data @ flash 0x4000000
+ 9  user         0x7D000000 0x0120E522 0x004D000000 0x01008430  # 2.0GB part / 18.1MB data @ flash 0x4D000000

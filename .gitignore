@@ -1,0 +1,43 @@
+# Proprietary firmware images and partition dumps
+*.mupg
+*.bin
+*.unpacked
+*.img
+
+# Extracted firmware trees may contain vendor binaries and credentials
+extracted/
+
+# Generated build/probe output; keep the written build guide
+build/**
+!build/README_CUSTOM_BUILD.md
+
+# Downloaded toolchains and archives
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.exe
+*.arm
+*.ko
+patches/usr/local/dbgbar/dbgbar
+
+# Runtime and test artifacts
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+.pytest_cache/
+.coverage
+
+# Local environments and editor state
+.venv/
+venv/
+.env
+.env.*
+.idea/
+.vscode/
+
+# One-off local capture script
+/g
