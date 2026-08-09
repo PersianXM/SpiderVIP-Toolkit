@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 online = ["paramiko>=3.0"]
+console = ["flask>=3.0", "requests>=2.31", "beautifulsoup4>=4.12"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]

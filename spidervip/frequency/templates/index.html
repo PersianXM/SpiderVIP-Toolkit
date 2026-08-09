@@ -914,6 +914,13 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const mount = () => String(window.SPIDERVIP_MOUNT || "").replace(/\/$/, "");
+    const withMount = (path) => {
+      if (!path.startsWith("/")) return path;
+      const base = mount();
+      return base ? base + path : path;
+    };
+    const apiFetch = (path, opts) => fetch(withMount(path), opts);
     const faNum = (n) => n.toLocaleString("fa-IR");
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -977,7 +984,7 @@
 
     async function loadSats() {
       try {
-        const r = await fetch("/satellites");
+        const r = await apiFetch("/satellites");
         const d = await r.json();
         if (!d.ok) {
           $("sat").innerHTML = '<option value="">خطا در بارگذاری فهرست</option>';
@@ -1000,7 +1007,7 @@
       $("loadBtn").disabled = true;
       ls.innerHTML = '<span class="spinner"></span> در حال واکشی زنده از رسیور…';
       try {
-        const resp = await fetch("/load_receiver", {
+        const resp = await apiFetch("/load_receiver", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(rxCreds()),
         });
@@ -1165,7 +1172,7 @@
       status.innerHTML = '<span class="spinner"></span> در حال واکشی و مقایسه…';
 
       try {
-        const resp = await fetch("/scrape", {
+        const resp = await apiFetch("/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url, sat_index: curSatIndex }),
@@ -1200,7 +1207,7 @@
       $("applyBtn").disabled = true;
       es.innerHTML = '<span class="spinner"></span> در حال اعمال تغییرات…';
       try {
-        const resp = await fetch("/apply", {
+        const resp = await apiFetch("/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sat_index: curSatIndex, add, remove }),
@@ -1231,7 +1238,7 @@
       $("sendLogBox").classList.add("hidden");
       $("sendLog").innerHTML = "";
       try {
-        const resp = await fetch("/send_to_receiver", {
+        const resp = await apiFetch("/send_to_receiver", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(rxCreds()),
@@ -1266,7 +1273,7 @@
     $("onlyDiff").addEventListener("change", paintCmpBody);
     $("applyBtn").addEventListener("click", applyChanges);
     $("sendBtn").addEventListener("click", sendToReceiver);
-    $("dlXml").addEventListener("click", () => { window.location = "/download_xml"; });
+    $("dlXml").addEventListener("click", () => { window.location = withMount("/download_xml"); });
 
     $("selLyn").addEventListener("click", () => {
       cmpAll.forEach(x => { x._add = (x.status === "lyngsat_only" && !!x.lyngsat); });

@@ -14,6 +14,12 @@
   };
 
   const $ = (id) => document.getElementById(id);
+  const mount = () => String(window.SPIDERVIP_MOUNT || "").replace(/\/$/, "");
+  const withMount = (path) => {
+    if (!path.startsWith("/")) return path;
+    const base = mount();
+    return base ? base + path : path;
+  };
   const toast = (msg) => {
     const el = $("toast");
     el.textContent = msg;
@@ -23,7 +29,7 @@
   };
 
   async function api(path, opts = {}) {
-    const res = await fetch(path, {
+    const res = await fetch(withMount(path), {
       headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
       ...opts,
     });

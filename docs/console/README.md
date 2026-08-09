@@ -1,19 +1,20 @@
 # موضوع: کنسول واحد (SpiderVIP Console)
 
-داشبورد واحد برای کارهای عملیاتی رسیور؛ هنوز پیاده‌سازی نشده — پوشهٔ کد رزرو شده است.
+داشبورد واحد برای کارهای عملیاتی رسیور.
 
 ## کد
 
-- رزرو: [`../../spidervip/console/`](../../spidervip/console/)
+- `spidervip/console/` — پوسته + پروکسی فاز ۱
 - نام محصول UI: **SpiderVIP Console** / **کنسول SpiderVIP**
+- اجرا: `python -m spidervip.cli console` → `http://127.0.0.1:8787/`
 
-## فضاهای کاری برنامه‌ریزی‌شده
+## فضاهای کاری
 
 | مسیر UI | موضوع |
 |---|---|
-| `/frequencies` | مدیریت فرکانس (`spidervip/frequency`) |
-| `/channels` | کانال و Favorite (`spidervip/channels`) |
+| `/frequencies/` | مدیریت فرکانس (`spidervip/frequency`) |
+| `/channels/` | کانال و Favorite (`spidervip/channels`) |
 
-اتصال IP/وضعیت رسیور و سیاست backup مشترک در shell قرار می‌گیرد؛ منطق هر موضوع جدا می‌ماند.
+فاز ۱ فقط پوسته و mount است. اتصال مشترک IP/وضعیت رسیور در فاز ۲ می‌آید.
 
 نقشهٔ موضوعات: [`../TOPICS.md`](../TOPICS.md).

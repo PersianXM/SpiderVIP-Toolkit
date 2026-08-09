@@ -273,12 +273,35 @@ def _cmd_channels_apply(args: argparse.Namespace) -> int:
     return 0 if report.status == OperationStatus.COMPLETED else 1
 
 
+def _cmd_console(args: argparse.Namespace) -> int:
+    from .console import run_console
+
+    run_console(
+        host=args.bind,
+        port=args.http_port,
+        simulate=bool(args.simulate or not args.host),
+        receiver_host=args.host,
+        workspace=args.workspace,
+        catalog_url=args.catalog,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="spidervip",
-        description="SpiderVIP toolkit: A/V freeze, channels/favorites, and related tools.",
+        description="SpiderVIP toolkit: Console, A/V freeze, channels/favorites, and related tools.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_console = sub.add_parser("console", help="open the unified SpiderVIP Console")
+    p_console.add_argument("--simulate", action="store_true", help="use the channel simulator backend")
+    p_console.add_argument("--host", help="receiver IP/hostname for live channel ops")
+    p_console.add_argument("--bind", default="127.0.0.1", help="console bind address")
+    p_console.add_argument("--http-port", type=int, default=8787, help="console HTTP port")
+    p_console.add_argument("--workspace", help="channels workspace directory")
+    p_console.add_argument("--catalog", help="channels update catalog URL or file path")
+    p_console.set_defaults(func=_cmd_console)
 
     p_diag = sub.add_parser("diagnose", help="list probable causes of the A/V freeze")
     _add_connection_args(p_diag)

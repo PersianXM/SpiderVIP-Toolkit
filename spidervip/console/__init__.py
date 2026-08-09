@@ -1,17 +1,14 @@
-"""SpiderVIP Console — unified dashboard shell (reserved).
+"""SpiderVIP Console — unified local dashboard (phase 1).
 
-Product UI name: **SpiderVIP Console**
+Product UI name: **SpiderVIP Console** / **کنسول SpiderVIP**
 
-This package will host the shared web shell that mounts topic workspaces:
-
-- Frequency Manager (``spidervip.frequency``)
-- Channel & Favorite Manager (``spidervip.channels``)
-- optional freeze / status views later
-
-Not implemented yet: run topic dashboards separately until the shell lands.
+Phase 1 mounts the existing Frequency Manager and Channel dashboards behind one
+host/port with a shared shell. Shared receiver connection (phase 2) comes later.
 """
 
-__all__: list[str] = []
+from .server import run_console
+
+__all__ = ["PRODUCT_NAME", "PRODUCT_NAME_FA", "run_console"]
 
 PRODUCT_NAME = "SpiderVIP Console"
 PRODUCT_NAME_FA = "کنسول SpiderVIP"

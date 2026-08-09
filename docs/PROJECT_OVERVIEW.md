@@ -158,7 +158,7 @@ patchهای متناظر:
 - `spidervip/freeze/` — تشخیص/تعمیر فریز A/V؛
 - `spidervip/channels/` — مدیریت کانال و Favorite؛
 - `spidervip/frequency/` — مدیریت فرکانس (Frequency Manager)؛
-- `spidervip/console/` — رزرو پوستهٔ واحد **SpiderVIP Console**.
+- `spidervip/console/` — پوستهٔ واحد **SpiderVIP Console** (فاز ۱).
 
 ### `patches/`
 
