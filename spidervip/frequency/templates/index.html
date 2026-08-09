@@ -3,42 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#C1E152">
+  <meta name="theme-color" content="#C5F238">
   <meta name="color-scheme" content="light">
   <meta name="app-ui-version" content="polish-v1">
   <title>مدیریت فرکانس — SpiderVIP</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0d12' stroke='%230a84ff' stroke-width='2'/%3E%3Cellipse cx='16' cy='16' rx='6' ry='3' fill='none' stroke='%2330d158' stroke-width='1.5' transform='rotate(-30 16 16)'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%230a84ff'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    /* Digigo neo-brutalist — tokens mirror Console theme.css for standalone */
+    /* Design system tokens — mirror console/theme.css for standalone */
     :root {
-      --sv-page: #fafaf7;
-      --sv-beige: #f0f0e8;
-      --sv-white: #ffffff;
-      --sv-ink: #0b1220;
-      --sv-navy: #121a2a;
-      --sv-muted: #4a5568;
-      --sv-lime: #c1e152;
-      --sv-orange: #ff6b35;
-      --sv-sky: #89cff0;
-      --sv-danger: #e11d48;
-      --sv-ok: #15803d;
-      --sv-warn: #ca8a04;
-      --sv-border: 2.5px solid #0b1220;
-      --sv-border-thin: 2px solid #0b1220;
-      --sv-shadow-hard: 4px 4px 0 #0b1220;
-      --sv-shadow-hard-sm: 3px 3px 0 #0b1220;
-      --sv-radius-sm: 12px;
-      --sv-radius-md: 18px;
-      --sv-radius-lg: 26px;
+      --color-background: #f7f5ee;
+      --color-surface: #fffef9;
+      --color-surface-muted: #eeede6;
+      --color-ink: #111426;
+      --color-ink-secondary: #303347;
+      --color-ink-muted: #666978;
+      --color-lime: #c5f238;
+      --color-orange: #ff6418;
+      --color-blue: #58a8f5;
+      --color-yellow: #f7c84b;
+      --color-success: #75c943;
+      --color-error: #e84a4a;
+      --color-warning: #f7c84b;
+
+      --sv-page: var(--color-background);
+      --sv-beige: var(--color-surface-muted);
+      --sv-white: var(--color-surface);
+      --sv-ink: var(--color-ink);
+      --sv-navy: #111426;
+      --sv-muted: var(--color-ink-muted);
+      --sv-lime: var(--color-lime);
+      --sv-orange: var(--color-orange);
+      --sv-sky: var(--color-blue);
+      --sv-danger: var(--color-error);
+      --sv-ok: var(--color-success);
+      --sv-warn: var(--color-warning);
+      --sv-border: 2px solid #111426;
+      --sv-border-thin: 1px solid #111426;
+      --sv-shadow-hard: 4px 4px 0 #111426;
+      --sv-shadow-hard-sm: 3px 3px 0 #111426;
+      --sv-radius-sm: 8px;
+      --sv-radius-md: 12px;
+      --sv-radius-lg: 16px;
       --sv-radius-pill: 999px;
-      --sv-focus: 0 0 0 3px rgba(137, 207, 240, 0.55);
+      --sv-focus: 0 0 0 3px rgba(88, 168, 245, 0.55);
       --sv-ease: cubic-bezier(0.16, 1, 0.3, 1);
-      --sv-font: "Vazirmatn", "Sora", "Segoe UI", system-ui, sans-serif;
-      --sv-font-display: "Sora", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+      --sv-font: "Vazirmatn", "Inter", "Segoe UI", system-ui, sans-serif;
+      --sv-font-display: "Space Grotesk", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
 
       --bg: var(--sv-page);
       --bg-elevated: var(--sv-beige);
@@ -55,12 +69,12 @@
       --warn: var(--sv-warn);
       --info: #1d6fa5;
       --text: var(--sv-ink);
-      --text-secondary: var(--sv-muted);
+      --text-secondary: var(--color-ink-secondary);
       --muted: var(--sv-muted);
-      --border: rgba(11, 18, 32, 0.18);
-      --t-both: rgba(193, 225, 82, 0.28);
-      --t-rec: rgba(255, 107, 53, 0.14);
-      --t-lyn: rgba(137, 207, 240, 0.35);
+      --border: rgba(17, 20, 38, 0.18);
+      --t-both: rgba(197, 242, 56, 0.28);
+      --t-rec: rgba(255, 100, 24, 0.14);
+      --t-lyn: rgba(88, 168, 245, 0.35);
       --ease-out: var(--sv-ease);
       --r-sm: var(--sv-radius-sm);
       --r-md: var(--sv-radius-md);
@@ -78,8 +92,8 @@
       font: 100%/1.6 var(--sv-font);
       color: var(--text);
       background:
-        radial-gradient(900px 480px at 95% -5%, rgba(193, 225, 82, 0.25), transparent 55%),
-        radial-gradient(700px 400px at -5% 20%, rgba(137, 207, 240, 0.2), transparent 50%),
+        radial-gradient(900px 480px at 95% -5%, rgba(197, 242, 56, 0.22), transparent 55%),
+        radial-gradient(700px 400px at -5% 20%, rgba(88, 168, 245, 0.18), transparent 50%),
         var(--sv-page);
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
@@ -192,7 +206,7 @@
       position: absolute;
       top: 14px;
       height: 3px;
-      background: rgba(11,18,32,0.2);
+      background: rgba(17,20,38,0.2);
       width: calc(50% - 16px);
     }
     .stepper-item:not(:last-child)::after {
@@ -351,8 +365,8 @@
       justify-content: center;
       gap: 8px;
       padding: 12px 22px;
-      border: var(--sv-border-thin);
-      border-radius: var(--sv-radius-pill);
+      border: var(--sv-border);
+      border-radius: var(--sv-radius-md);
       background: var(--sv-lime);
       color: var(--accent-fg);
       font-weight: 700;
@@ -387,7 +401,7 @@
       color: var(--sv-ink);
     }
     button.ghost.btn-rec {
-      background: #ffe4dc;
+      background: #ffe0d6;
       color: var(--sv-ink);
     }
     button:disabled { opacity: .40; cursor: not-allowed; transform: none; box-shadow: none; }
@@ -491,7 +505,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td {
       padding: 10px 12px;
-      border-bottom: 1px solid rgba(11,18,32,0.12);
+      border-bottom: 1px solid rgba(17,20,38,0.12);
       text-align: center;
     }
     th {
@@ -506,7 +520,7 @@
     .th-add { width: 60px; color: #1d6fa5; }
     .th-del { width: 56px; color: var(--sv-danger); }
     tbody tr { transition: background .15s var(--ease-out); }
-    tbody tr:hover { background: rgba(11,18,32,0.04); }
+    tbody tr:hover { background: rgba(17,20,38,0.04); }
     .log-cell { text-align: right; direction: rtl; unicode-bidi: plaintext; }
 
     .cmp-cards { display: none; gap: 10px; }
@@ -594,7 +608,7 @@
       background: var(--sv-white);
     }
     .chip.both { background: var(--sv-lime); }
-    .chip.rec  { background: #ffe4dc; }
+    .chip.rec  { background: #ffe0d6; }
     .chip.lyn  { background: var(--sv-sky); }
     .chip.tot  { background: var(--sv-white); color: var(--text-secondary); }
 
@@ -728,6 +742,32 @@
     .check-wrap.del input:checked + .check-box { background: var(--sv-orange); }
     .check-wrap.del input:checked + .check-box::after { border-color: #fff; }
 
+
+    .fetch-panel { overflow: visible; }
+    .fetch-panel .geo-deco {
+      position: absolute; pointer-events: none; z-index: 0;
+      border: 2px solid var(--sv-ink);
+    }
+    .fetch-panel .geo-cube {
+      top: -8px; left: 18px; width: 16px; height: 16px;
+      background: linear-gradient(135deg, #fffef9 50%, transparent 50%),
+                  linear-gradient(225deg, #c5cad3 50%, transparent 50%), #eeede6;
+      box-shadow: 2px 2px 0 var(--sv-ink); transform: rotate(12deg);
+    }
+    .fetch-panel .geo-circle {
+      bottom: -6px; right: 32px; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--sv-orange);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .fetch-panel .geo-cube { animation: freq-float 6s var(--sv-ease) infinite; }
+      .fetch-panel .geo-circle { animation: freq-float 8s 0.5s var(--sv-ease) infinite; }
+    }
+    @keyframes freq-float {
+      0%, 100% { translate: 0 0; }
+      50% { translate: 0 -5px; }
+    }
+    .site-logo { border-radius: var(--sv-radius-md); }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -762,6 +802,7 @@
       .cmp-toolbar-sep { display: none; }
       .toolbar-apply button { max-width: none; }
       .site-header { flex-direction: column; align-items: flex-start; }
+      .geo-hide-mobile { display: none !important; }
     }
 
     @media (min-width: 641px) {
@@ -808,6 +849,8 @@
     </nav>
 
     <div class="card fetch-panel" data-step-card="1">
+      <span class="geo-deco geo-cube geo-hide-mobile" aria-hidden="true"></span>
+      <span class="geo-deco geo-circle geo-hide-mobile" aria-hidden="true"></span>
       <p class="step-title" id="fetchStepTitle">واکشی اطلاعات از رسیور</p>
       <p class="hint hint-flush" id="fetchHint">
         فهرست ماهواره‌ها و TP را از پایگاه زندهٔ رسیور بخوانید.

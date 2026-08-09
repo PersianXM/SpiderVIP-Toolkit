@@ -1,42 +1,117 @@
-/* SpiderVIP Console — shared Digigo / neo-brutalist tokens
+/* SpiderVIP — operational design system tokens
+   Source: docs/design/DESIGN_SYSTEM.md (+ UI_ART_DIRECTION.md)
    Served at /static/console/theme.css
-   Keep Frequency + Channels embedded :root blocks in sync with this file. */
+   Keep Frequency + Channels :root blocks in sync with this file. */
 
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap");
 
 :root {
-  --sv-page: #fafaf7;
-  --sv-beige: #f0f0e8;
-  --sv-white: #ffffff;
-  --sv-ink: #0b1220;
-  --sv-navy: #121a2a;
-  --sv-muted: #4a5568;
-  --sv-lime: #c1e152;
-  --sv-orange: #ff6b35;
-  --sv-sky: #89cff0;
-  --sv-danger: #e11d48;
-  --sv-ok: #15803d;
-  --sv-warn: #ca8a04;
-  --sv-line: #0b1220;
-  --sv-line-soft: rgba(11, 18, 32, 0.14);
+  /* Base */
+  --color-background: #f7f5ee;
+  --color-surface: #fffef9;
+  --color-surface-muted: #eeede6;
+  --color-ink: #111426;
+  --color-ink-secondary: #303347;
+  --color-ink-muted: #666978;
+  --color-border: #111426;
 
-  --sv-radius-sm: 12px;
-  --sv-radius-md: 18px;
-  --sv-radius-lg: 26px;
-  --sv-radius-pill: 999px;
+  /* Accents */
+  --color-lime: #c5f238;
+  --color-orange: #ff6418;
+  --color-blue: #58a8f5;
+  --color-yellow: #f7c84b;
 
-  --sv-border: 2.5px solid var(--sv-ink);
-  --sv-border-thin: 2px solid var(--sv-ink);
-  --sv-shadow-hard: 4px 4px 0 var(--sv-ink);
-  --sv-shadow-hard-sm: 3px 3px 0 var(--sv-ink);
+  /* Semantic */
+  --color-success: #75c943;
+  --color-warning: #f7c84b;
+  --color-error: #e84a4a;
+  --color-info: #58a8f5;
 
-  --sv-font: "Vazirmatn", "Sora", "Segoe UI", system-ui, sans-serif;
-  --sv-font-display: "Sora", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
-  --sv-focus: 0 0 0 3px rgba(137, 207, 240, 0.55);
-  --sv-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Borders */
+  --border-thin: 1px solid var(--color-border);
+  --border-strong: 2px solid var(--color-border);
 
-  /* Legacy aliases used by module CSS during migration */
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-hard: 4px 4px 0 var(--color-ink);
+  --shadow-hard-sm: 3px 3px 0 var(--color-ink);
+  --shadow-soft: 0 4px 18px rgba(17, 20, 38, 0.08);
+
+  /* Type */
+  --font-display: "Space Grotesk", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Vazirmatn", "Inter", "Segoe UI", system-ui, sans-serif;
+  --text-display: clamp(2.5rem, 5vw, 5rem);
+  --text-h1: clamp(2rem, 3.5vw, 3.5rem);
+  --text-h2: clamp(1.5rem, 2.5vw, 2.25rem);
+  --text-h3: 1.25rem;
+  --text-body: 0.95rem;
+  --text-small: 0.8rem;
+  --text-micro: 0.68rem;
+
+  /* Motion */
+  --motion-fast: 180ms;
+  --motion-normal: 300ms;
+  --motion-slow: 500ms;
+  --motion-float: 6s;
+  --motion-drift: 9s;
+  --motion-rotate: 12s;
+  --motion-pulse: 8s;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- SpiderVIP aliases (modules / legacy class hooks) ---- */
+  --sv-page: var(--color-background);
+  --sv-beige: var(--color-surface-muted);
+  --sv-white: var(--color-surface);
+  --sv-ink: var(--color-ink);
+  --sv-navy: #111426;
+  --sv-muted: var(--color-ink-muted);
+  --sv-ink-secondary: var(--color-ink-secondary);
+  --sv-lime: var(--color-lime);
+  --sv-orange: var(--color-orange);
+  --sv-sky: var(--color-blue);
+  --sv-blue: var(--color-blue);
+  --sv-yellow: var(--color-yellow);
+  --sv-danger: var(--color-error);
+  --sv-ok: var(--color-success);
+  --sv-warn: var(--color-warning);
+  --sv-line: var(--color-border);
+  --sv-line-soft: rgba(17, 20, 38, 0.14);
+
+  --sv-radius-sm: var(--radius-sm);
+  --sv-radius-md: var(--radius-md);
+  --sv-radius-lg: var(--radius-lg);
+  --sv-radius-xl: var(--radius-xl);
+  --sv-radius-pill: var(--radius-pill);
+
+  --sv-border: var(--border-strong);
+  --sv-border-thin: var(--border-thin);
+  --sv-shadow-hard: var(--shadow-hard);
+  --sv-shadow-hard-sm: var(--shadow-hard-sm);
+
+  --sv-font: var(--font-ui);
+  --sv-font-display: var(--font-display);
+  --sv-focus: 0 0 0 3px rgba(88, 168, 245, 0.55);
+  --sv-ease: var(--ease-out);
+
+  /* Broad legacy aliases */
   --bg: var(--sv-page);
   --text: var(--sv-ink);
   --muted: var(--sv-muted);
@@ -53,6 +128,124 @@
   box-sizing: border-box;
 }
 
+/* Geometric decoration primitives (controlled density — place manually) */
+.geo {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border: 2px solid var(--color-ink);
+}
+
+.geo-square {
+  width: 18px;
+  height: 18px;
+  background: var(--color-lime);
+}
+
+.geo-outline-square {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+}
+
+.geo-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-orange);
+}
+
+.geo-outline-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.geo-capsule {
+  width: 36px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-blue);
+}
+
+.geo-half {
+  width: 28px;
+  height: 14px;
+  border-radius: 28px 28px 0 0;
+  border-bottom: none;
+  background: var(--color-yellow);
+}
+
+.geo-line {
+  width: 42px;
+  height: 0;
+  border: none;
+  border-top: 2px solid var(--color-ink);
+  background: transparent;
+}
+
+.geo-dots {
+  width: 28px;
+  height: 8px;
+  border: none;
+  background:
+    radial-gradient(circle, var(--color-ink) 2.5px, transparent 2.6px) 0 50% / 10px 8px repeat-x;
+}
+
+.geo-cube {
+  width: 18px;
+  height: 18px;
+  background:
+    linear-gradient(135deg, #fffef9 50%, transparent 50%),
+    linear-gradient(225deg, #c5cad3 50%, transparent 50%),
+    #eeede6;
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+.geo-rot-4 { transform: rotate(4deg); }
+.geo-rot-8 { transform: rotate(8deg); }
+.geo-rot-12 { transform: rotate(12deg); }
+.geo-rot-n4 { transform: rotate(-4deg); }
+.geo-rot-n8 { transform: rotate(-8deg); }
+.geo-rot-n12 { transform: rotate(-12deg); }
+
+.geo-tl { top: -8px; left: 16px; }
+.geo-tr { top: -10px; right: 20px; }
+.geo-bl { bottom: -6px; left: 24px; }
+.geo-br { bottom: -8px; right: 28px; }
+.geo-edge-r { top: 40%; right: -8px; }
+.geo-edge-l { top: 35%; left: -8px; }
+
+@keyframes geo-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -6px; }
+}
+@keyframes geo-drift {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 4px -3px; }
+}
+@keyframes geo-rotate {
+  from { rotate: 0deg; }
+  to { rotate: 360deg; }
+}
+@keyframes geo-pulse {
+  0%, 100% { opacity: 0.85; scale: 1; }
+  50% { opacity: 1; scale: 1.04; }
+}
+@keyframes geo-micro {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 2px 1px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .geo-anim-float { animation: geo-float var(--motion-float) var(--ease-out) infinite; }
+  .geo-anim-drift { animation: geo-drift var(--motion-drift) var(--ease-out) infinite; }
+  .geo-anim-rotate { animation: geo-rotate var(--motion-rotate) linear infinite; }
+  .geo-anim-pulse { animation: geo-pulse var(--motion-pulse) var(--ease-out) infinite; }
+  .geo-anim-micro { animation: geo-micro 5s var(--ease-out) infinite; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -61,4 +254,8 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@media (max-width: 720px) {
+  .geo-hide-mobile { display: none !important; }
 }

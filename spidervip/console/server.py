@@ -137,7 +137,7 @@ def _inject_page(
     text = text.replace("href=\"__SV_CONSOLE_STATIC__/", 'href="/static/console/')
     text = text.replace("href='__SV_CONSOLE_STATIC__/", "href='/static/console/")
 
-    # Shared Digigo theme — injected after rewrite so href stays /static/console/...
+    # Shared design-system theme — injected after rewrite so href stays /static/console/...
     theme_marker = 'href="/static/console/theme.css"'
     if theme_marker not in text and "href='/static/console/theme.css'" not in text:
         theme_link = f'<link rel="stylesheet" {theme_marker} />'
