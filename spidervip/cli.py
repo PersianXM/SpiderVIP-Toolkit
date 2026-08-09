@@ -1,4 +1,4 @@
-"""Command-line interface for the SpiderVIP A/V-freeze repair toolkit."""
+"""Command-line interface for the SpiderVIP toolkit."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import json
 import sys
 from typing import List, Optional
 
-from .diagnostics import diagnose
-from .model import RepairReport
-from .repair import repair
-from .simulator import FAULTS, SimulatedReceiver
+from .freeze.diagnostics import diagnose
+from .freeze.model import RepairReport
+from .freeze.repair import repair
+from .freeze.simulator import FAULTS, SimulatedReceiver
 
 
 def _build_receiver(args: argparse.Namespace):
@@ -18,7 +18,7 @@ def _build_receiver(args: argparse.Namespace):
         return SimulatedReceiver(faults=args.fault or [])
     if not args.host:
         raise SystemExit("error: --host is required unless --simulate is used")
-    from .ssh_receiver import PROFILES, SSHReceiver
+    from .freeze.ssh_receiver import PROFILES, SSHReceiver
 
     profile = PROFILES.get(args.profile)
     if profile is None:
@@ -276,7 +276,7 @@ def _cmd_channels_apply(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="spidervip",
-        description="Diagnose A/V freeze faults and manage SpiderVIP channel favorites.",
+        description="SpiderVIP toolkit: A/V freeze, channels/favorites, and related tools.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

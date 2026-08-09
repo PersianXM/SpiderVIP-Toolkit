@@ -1,6 +1,6 @@
-from spidervip.diagnostics import diagnose
-from spidervip.model import Priority
-from spidervip.simulator import FAULTS, SimulatedReceiver
+from spidervip.freeze.diagnostics import diagnose
+from spidervip.freeze.model import Priority
+from spidervip.freeze.simulator import FAULTS, SimulatedReceiver
 
 
 def test_healthy_receiver_has_no_findings():

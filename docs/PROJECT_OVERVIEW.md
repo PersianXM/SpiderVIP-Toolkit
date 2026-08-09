@@ -149,15 +149,16 @@ patchهای متناظر:
 - معماری scan و persistence فرکانس‌ها؛
 - تحلیل freeze، USB gadget، IRQ و pipeline صوت/تصویر؛
 - snapshotهای متنی جدول پارتیشن و ماهواره‌ها؛
-- ایندکس موضوعی: `docs/freeze/`، `docs/channels/`، و `TOPICS.md`.
+- ایندکس موضوعی: `docs/freeze/`، `docs/channels/`، `docs/frequency/`، `docs/console/`، و `TOPICS.md`.
 
 ### `spidervip/`
 
 بستهٔ عملیاتی چندموضوعی:
 
-- تشخیص/تعمیر فریز A/V در ریشهٔ بسته؛
+- `spidervip/freeze/` — تشخیص/تعمیر فریز A/V؛
 - `spidervip/channels/` — مدیریت کانال و Favorite؛
-- `spidervip/frequency/` — همگام‌سازی لیست فرکانس (LyngSat → رسیور).
+- `spidervip/frequency/` — مدیریت فرکانس (Frequency Manager)؛
+- `spidervip/console/` — رزرو پوستهٔ واحد **SpiderVIP Console**.
 
 ### `patches/`
 

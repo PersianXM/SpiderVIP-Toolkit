@@ -172,7 +172,7 @@ spidervip repair   --host 192.168.1.50 --dry-run          # plan only
 ```
 
 If your box does not match the `enigma2` profile, try `linux-stb` or adapt the
-shell commands in `spidervip/ssh_receiver.py`.
+shell commands in `spidervip/freeze/ssh_receiver.py`.
 
 ### Simulator (learn/test without hardware)
 
@@ -195,4 +195,4 @@ spidervip repair   --simulate --fault demux-stuck --fault audio-muted
 
 - Save `diagnose`/`repair` output (use `--json`) per device to keep a history.
 - When you adapt shell commands for a new model, add that `ReceiverProfile` to
-  `spidervip/ssh_receiver.py` so it is ready next time.
+  `spidervip/freeze/ssh_receiver.py` so it is ready next time.

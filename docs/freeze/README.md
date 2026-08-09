@@ -4,7 +4,8 @@
 
 ## کد و پچ
 
-- بستهٔ تشخیص/تعمیر: `spidervip/` (غیر از زیرپوشه‌های موضوعی دیگر)
+- بستهٔ تشخیص/تعمیر: `spidervip/freeze/`
+- CLI: `python -m spidervip.cli diagnose|repair|faults`
 - پچ‌های rootfs مرتبط: `patches/`
 - ابزار forensic / gadget: `tools/freeze_*.py`, `tools/deploy_freeze_watch.py`, `tools/ensure_gadget_up.py`, …
 

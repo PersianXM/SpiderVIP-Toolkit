@@ -1,7 +1,7 @@
 import pytest
 
-from spidervip.repair import repair
-from spidervip.simulator import FAULTS, SimulatedReceiver
+from spidervip.freeze.repair import repair
+from spidervip.freeze.simulator import FAULTS, SimulatedReceiver
 
 
 def test_repair_restarts_crashed_av_service():

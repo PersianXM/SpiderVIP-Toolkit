@@ -1,4 +1,4 @@
-from spidervip.ssh_receiver import ENIGMA2_PROFILE, PROFILES, _parse_state
+from spidervip.freeze.ssh_receiver import ENIGMA2_PROFILE, PROFILES, _parse_state
 
 
 def test_parse_state_reads_all_fields():

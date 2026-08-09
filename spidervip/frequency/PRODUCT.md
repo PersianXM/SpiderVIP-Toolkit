@@ -12,7 +12,7 @@ Primary user is the product owner, using the tool personally on a local network 
 
 ## Product Purpose
 
-LyngSat Web fetches frequency/transponder data from a LyngSat page, compares it side-by-side with the frequencies stored for a chosen satellite in the receiver database, lets the user select add/remove actions, applies those edits while preserving XML structure, and can push the result to the live receiver database. Success means: scrape completes correctly, comparison is accurate, and transfer to the receiver completes without error so the device’s working TP list reflects the user’s choices after reload/restart.
+**Frequency Manager** (مدیریت فرکانس) fetches frequency/transponder data from a source page such as LyngSat, compares it side-by-side with the frequencies stored for a chosen satellite in the receiver database, lets the user select add/remove actions, applies those edits while preserving XML structure, and can push the result to the live receiver database. Success means: scrape completes correctly, comparison is accurate, and transfer to the receiver completes without error so the device’s working TP list reflects the user’s choices after reload/restart.
 
 ## Positioning
 
@@ -36,7 +36,7 @@ Unlike editing a factory default XML that the receiver does not use at runtime, 
 
 ## Brand Commitments
 
-Product name in UI: **LyngSat → رسیور**. Voice is operational Persian technical UI for a personal/tools audience. No separate marketing brand system was established; do not invent logos, slogans, or commercial claims for a public listing beyond what the repo already states.
+Product name in UI: **مدیریت فرکانس** / **Frequency Manager**. LyngSat is a data source, not the product name. This module is part of the SpiderVIP monorepo and is intended to live under a future unified **SpiderVIP Console**. Voice is operational Persian technical UI for a personal/tools audience. No separate marketing brand system was established; do not invent logos, slogans, or commercial claims for a public listing beyond what the repo already states.
 
 ## Evidence on Hand
 

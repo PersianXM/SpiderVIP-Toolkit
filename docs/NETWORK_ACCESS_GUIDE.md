@@ -162,7 +162,7 @@ python tools/freeze_pull.py           # بعد از روشن‌شدن مجدد
 ## ارتباط با ابزار `spidervip`
 
 بک‌اند آنلاینِ پکیج `spidervip` فعلاً روی **SSH + paramiko** است
-(`spidervip/ssh_receiver.py`). روی دستگاه آزمایشگاهی فعلی **SSH نیست**؛ برای کار زنده
+(`spidervip/freeze/ssh_receiver.py`). روی دستگاه آزمایشگاهی فعلی **SSH نیست**؛ برای کار زنده
 از Telnet و `tools/telnet_*.py` استفاده کنید. عیب‌یابی بدون سخت‌افزار با
 `--simulate` ممکن است.
 

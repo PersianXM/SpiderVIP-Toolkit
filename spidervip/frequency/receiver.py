@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Receiver database helper for the LyngSat web app.
+Receiver database helper for Frequency Manager.
 
 Reads the Spider VIP firmware satellite database (the receiver's live
 satellites.xml). By default it uses the bundled snapshot `receiver_data.xml`,

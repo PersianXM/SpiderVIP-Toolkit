@@ -177,7 +177,7 @@ spidervip repair --host 192.168.1.50 --dry-run
 ```
 
 اگر مدل باکس شما با پروفایل `enigma2` سازگار نیست، پروفایل `linux-stb` را امتحان کنید یا
-دستورهای پوسته را در `spidervip/ssh_receiver.py` برای دستگاه خود تنظیم کنید.
+دستورهای پوسته را در `spidervip/freeze/ssh_receiver.py` برای دستگاه خود تنظیم کنید.
 
 ### شبیه‌ساز (برای آموزش و تست بدون سخت‌افزار)
 
@@ -203,4 +203,4 @@ spidervip repair   --simulate --fault demux-stuck --fault audio-muted
 - خروجیِ `diagnose`/`repair` را (به‌ویژه با `--json`) برای هر دستگاه ذخیره کنید تا سابقه‌ی
   عیب‌یابی بماند.
 - اگر برای مدل جدیدی دستورهای پوسته را در پروفایل تنظیم کردید، آن پروفایل را در
-  `spidervip/ssh_receiver.py` اضافه کنید تا برای دفعات بعد آماده باشد.
+  `spidervip/freeze/ssh_receiver.py` اضافه کنید تا برای دفعات بعد آماده باشد.

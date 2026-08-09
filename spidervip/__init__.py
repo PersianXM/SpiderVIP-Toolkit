@@ -1,16 +1,26 @@
 """SpiderVIP multi-topic toolkit for satellite receivers.
 
-Topics live as packages under this tree (see docs/TOPICS.md):
+Topics (see docs/TOPICS.md):
 
-- A/V freeze diagnose/repair modules in this package root
+- ``spidervip.freeze`` — A/V freeze diagnose/repair
 - ``spidervip.channels`` — channel & favorite manager
-- ``spidervip/frequency`` — LyngSat frequency/TP sync web app
+- ``spidervip.frequency`` — Frequency Manager (TP sync)
+- ``spidervip.console`` — reserved unified SpiderVIP Console shell
 """
 
-from .model import AVStatus, Finding, PipelineState, Priority, RepairReport, RepairStep
-from .diagnostics import diagnose, CHECKS
-from .patches import PATCHES, patch_for_finding
-from .repair import repair
+from .freeze import (
+    CHECKS,
+    PATCHES,
+    AVStatus,
+    Finding,
+    PipelineState,
+    Priority,
+    RepairReport,
+    RepairStep,
+    diagnose,
+    patch_for_finding,
+    repair,
+)
 
 __all__ = [
     "AVStatus",

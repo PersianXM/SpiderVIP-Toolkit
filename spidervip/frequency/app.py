@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-LyngSat -> Receiver frequency tool (standalone web app).
+Frequency Manager — SpiderVIP TP / frequency sync web app.
 
 Workflow:
   1. Pick a satellite already present in the receiver (dropdown).
-  2. Enter a LyngSat page URL.
-  3. App scrapes the LyngSat frequencies.
+  2. Enter a LyngSat (or compatible) page URL as the external source.
+  3. App scrapes the source frequencies.
   4. A side-by-side comparison table shows which carriers exist on both sides
      and which exist only on one side.
   5. User ticks the carriers to import.
@@ -13,8 +13,7 @@ Workflow:
      preserving the receiver XML structure.
   7. The full, valid receiver database is offered for download.
 
-Run:
-    cd G:\\LyngSat-Web
+Run from this package directory:
     python app.py
 Then open http://127.0.0.1:5000
 """
@@ -377,5 +376,5 @@ def download_route():
 
 
 if __name__ == "__main__":
-    print("LyngSat Web running at http://127.0.0.1:5000")
+    print("Frequency Manager running at http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)
