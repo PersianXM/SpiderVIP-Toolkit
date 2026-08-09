@@ -662,11 +662,14 @@
       (c) => (c.service_type || "TV").toLowerCase() !== "radio"
     );
     state.favorites = (data.favorites || []).filter((f) => !String(f.id).endsWith("_radio"));
+    state.motorProfile = data.motor_profile || null;
     $("banner").hidden = false;
     $("banner").textContent = data.persistence_warning || "";
     if (data.apply) {
       $("applyStatus").textContent = `${data.apply.status}: ${data.apply.message}`;
       $("applySteps").innerHTML = (data.apply.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      const st = applyStageFromStatus(data.apply.status, data.apply.message);
+      if (st.filled || st.current || st.failed) setApplyProgress(st);
     }
     fillSatFilter();
     renderChannels();
@@ -842,6 +845,78 @@
     await refresh();
   });
 
+  function applyStageFromStatus(status, message) {
+    const s = String(status || "").toLowerCase();
+    const m = String(message || "").toLowerCase();
+    if (s.includes("fail")) return { filled: 0, current: 0, failed: true };
+    if (s.includes("completed")) return { filled: 5, current: 0, failed: false };
+    if (s.includes("reboot")) return { filled: 3, current: 4, failed: false };
+    if (s.includes("verif")) {
+      // Post-commit verify vs post-reboot verify
+      if (m.includes("reboot") || m.includes("settle") || m.includes("after reboot")) {
+        return { filled: 4, current: 5, failed: false };
+      }
+      return { filled: 2, current: 3, failed: false };
+    }
+    if (s.includes("upload")) return { filled: 1, current: 2, failed: false };
+    if (s.includes("apply")) return { filled: 2, current: 3, failed: false };
+    if (s.includes("validat") || s.includes("prepar") || s.includes("load")) {
+      return { filled: 0, current: 1, failed: false };
+    }
+    if (s.includes("idle") || !s) return { filled: 0, current: 0, failed: false };
+    return { filled: 0, current: 1, failed: false };
+  }
+
+  function setApplyProgress(stage) {
+    const bar = $("applyProgress");
+    if (!bar) return;
+    bar.hidden = false;
+    const filled = stage.filled || 0;
+    const current = stage.current || 0;
+    const failed = !!stage.failed;
+    bar.querySelectorAll(".apply-seg").forEach((el) => {
+      const n = Number(el.getAttribute("data-seg"));
+      el.classList.remove("on", "current", "fail");
+      if (failed && current && n === current) {
+        el.classList.add("fail");
+      } else if (n <= filled) {
+        el.classList.add("on");
+      } else if (n === current) {
+        el.classList.add("current");
+      }
+    });
+  }
+
+  function hideApplyProgress() {
+    const bar = $("applyProgress");
+    if (!bar) return;
+    bar.hidden = true;
+    bar.querySelectorAll(".apply-seg").forEach((el) => {
+      el.classList.remove("on", "current", "fail");
+    });
+  }
+
+  async function pollApplyProgress(stopFlag) {
+    while (!stopFlag.done) {
+      try {
+        const data = await api("/api/state");
+        const pipe = data.pipeline || {};
+        const status = pipe.status || "";
+        const message = pipe.message || "";
+        if (status && status !== "Idle") {
+          $("applyStatus").textContent = `${status}: ${message}`;
+          setApplyProgress(applyStageFromStatus(status, message));
+        }
+        if (Array.isArray(pipe.steps) && pipe.steps.length) {
+          $("applySteps").innerHTML = pipe.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+        }
+      } catch (_) {
+        // ignore transient poll errors while apply runs
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+
   $("btnPull").addEventListener("click", async () => {
     if (!(await confirmDialog("Pull from receiver", "Replace the local workspace with TV channels and favorites from the receiver?"))) return;
     $("applyStatus").textContent = "Loading: pulling from receiver…";
@@ -857,21 +932,36 @@
   $("btnApply").addEventListener("click", async () => {
     if (!(await confirmDialog(
       "Apply to receiver",
-      "This uploads Favorites (including .simple index files), commits them into live_prog "
-      + "via WebIF reload, then reboots to verify persistence. Continue?"
+      "This uploads Favorites, commits them into live_prog, restores Motor settings, "
+      + "then reboots to verify. Continue?"
     ))) return;
     $("btnApply").disabled = true;
     $("applyStatus").textContent = "Preparing…";
+    $("applySteps").innerHTML = "";
+    setApplyProgress({ filled: 0, current: 1, failed: false });
+    const stopFlag = { done: false };
+    const poller = pollApplyProgress(stopFlag);
     try {
       const res = await api("/api/receiver/apply", {
         method: "POST",
         body: JSON.stringify({ reboot: true }),
       });
-      $("applyStatus").textContent = `${res.report.status}: ${res.report.message}`;
-      $("applySteps").innerHTML = (res.report.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
-      toast(res.report.message || res.report.status);
+      stopFlag.done = true;
+      await poller;
+      const report = res.report || {};
+      $("applyStatus").textContent = `${report.status}: ${report.message}`;
+      $("applySteps").innerHTML = (report.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      if (String(report.status || "").toLowerCase().includes("completed") && report.verified !== false) {
+        setApplyProgress({ filled: 5, current: 0, failed: false });
+      } else {
+        setApplyProgress({ filled: 0, current: 3, failed: true });
+      }
+      toast(report.message || report.status);
     } catch (err) {
+      stopFlag.done = true;
+      await poller;
       $("applyStatus").textContent = `Failed: ${err.message}`;
+      setApplyProgress({ filled: 0, current: 3, failed: true });
       toast(err.message);
     } finally {
       $("btnApply").disabled = false;

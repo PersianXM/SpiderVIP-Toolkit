@@ -124,6 +124,70 @@ class SafeApplyPipeline:
                     ),
                 )
 
+            # servicelistreload also reimports satellites.xml and clears Motor/USALS
+            # (MotorSettingReinit). Restore from Motor profile capture and/or the
+            # pre-apply live_prog backup — never call reload again afterwards.
+            apply_motor = getattr(self.receiver, "apply_motor_profile", None)
+            preserve = getattr(self.receiver, "preserve_motor_from_backup", None)
+            profile = None
+            try:
+                profile = self.manager.get_motor_profile()
+                # Always restore Motor after Favorite commit; optional flag is ignored.
+                if profile is not None:
+                    profile.enabled = True
+            except Exception:
+                profile = None
+
+            if callable(apply_motor) and profile is not None:
+                self._set(
+                    OperationStatus.APPLYING,
+                    "Restoring dish Motor/USALS from dashboard profile / pre-apply backup",
+                    on_status,
+                )
+                try:
+                    result = apply_motor(profile, live_prog_backup=live_prog_bak or "")
+                    self._steps.append(
+                        f"motor_restore: method={result.get('method')} "
+                        f"windows={result.get('restored')}"
+                    )
+                except Exception as exc:
+                    self._steps.append(f"motor_restore_failed: {exc}")
+                self._set(
+                    OperationStatus.VERIFYING,
+                    "Re-verifying favorites after Motor restore",
+                    on_status,
+                )
+                ok = self._verify_stable(expected, attempts=2, gap=1.5)
+                if not ok:
+                    return self._rollback(
+                        live_files,
+                        live_prog_bak,
+                        snapshot_path,
+                        on_status,
+                        reboot=False,
+                        message=(
+                            "Motor restore changed receiver state and Favorites no longer match. "
+                            "Receiver state was rolled back."
+                        ),
+                    )
+            elif callable(preserve) and live_prog_bak:
+                # Simulator / backends without full profile apply.
+                self._set(
+                    OperationStatus.APPLYING,
+                    "Restoring dish Motor/USALS fields from pre-apply backup",
+                    on_status,
+                )
+                try:
+                    restored = preserve(live_prog_bak)
+                    self._steps.append(f"motor_preserve: restored {restored} satellite window(s)")
+                except Exception as exc:
+                    self._steps.append(f"motor_preserve_failed: {exc}")
+            else:
+                self._steps.append(
+                    "motor_note: save a Motor profile (Capture from receiver) so Apply "
+                    "can restore USALS after servicelistreload"
+                )
+
             if reboot:
                 self._set(OperationStatus.REBOOTING, "Rebooting receiver to confirm persistence", on_status)
                 self.receiver.reboot()
@@ -199,16 +263,24 @@ class SafeApplyPipeline:
         message: str,
     ) -> ApplyReport:
         self._set(OperationStatus.APPLYING, "Rolling back receiver favorites", on_status)
+        # Restore bouquet text files first (no reload), then put live_prog back.
+        # Never call servicelistreload during rollback — it reimports satellites
+        # and can shrink/corrupt a restored live_prog backup.
+        try:
+            restore_bq = getattr(self.receiver, "restore_bouquet_files", None)
+            if callable(restore_bq):
+                try:
+                    restore_bq(live_files, commit=False)
+                except TypeError:
+                    restore_bq(live_files)
+        except Exception:
+            pass
         restore_lp = getattr(self.receiver, "restore_live_prog", None)
         if live_prog_bak and callable(restore_lp):
             try:
                 restore_lp(live_prog_bak)
             except Exception:
                 pass
-        try:
-            self.receiver.restore_bouquet_files(live_files)
-        except Exception:
-            pass
         if reboot:
             try:
                 self.receiver.reboot()

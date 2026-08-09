@@ -333,6 +333,33 @@ button.fav-act:disabled {
 }
 .ops .card-block:first-of-type { border-top: 0; }
 .ops h3 { margin: 0 0 6px; font-size: 0.95rem; }
+.motor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0;
+}
+.motor-grid label, .ops label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.motor-grid input, .ops input[type="text"], .ops input[type="number"] {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+.motor-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  margin: 8px 0;
+}
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row.end { justify-content: flex-end; margin-top: 14px; }
 .preview, .status-box {
@@ -343,6 +370,53 @@ button.fav-act:disabled {
   border: 1px solid var(--line);
   font-size: 0.88rem;
   white-space: pre-wrap;
+}
+.apply-progress {
+  margin: 8px 0 4px;
+}
+.apply-progress-track {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.apply-seg {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: #d8e3de;
+  border: 1px solid rgba(15, 107, 92, 0.12);
+  transition: background .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+.apply-seg.on {
+  background: linear-gradient(180deg, #2f9e6a, #1f7a52);
+  border-color: rgba(31, 122, 82, 0.35);
+  box-shadow: 0 0 0 1px rgba(47, 158, 106, 0.18);
+}
+.apply-seg.current {
+  background: linear-gradient(180deg, #3cb87a, #22885a);
+  box-shadow:
+    0 0 0 2px rgba(47, 158, 106, 0.2),
+    0 0 10px rgba(47, 158, 106, 0.35);
+  animation: apply-seg-pulse 1.2s ease-in-out infinite;
+}
+.apply-seg.fail {
+  background: linear-gradient(180deg, #c45a5a, #8f2d2d);
+  border-color: rgba(143, 45, 45, 0.35);
+  box-shadow: none;
+  animation: none;
+}
+.apply-progress-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+@keyframes apply-seg-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
 }
 .steps { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.82rem; }
 .update-list { display: flex; flex-direction: column; gap: 10px; }

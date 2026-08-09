@@ -258,10 +258,50 @@ def test_apply_commits_into_live_prog_and_survives_reboot(manager: FavoriteManag
     assert report.status == OperationStatus.COMPLETED
     assert report.verified is True
     assert "commit_service_list" in receiver.actions
+    assert "apply_motor_profile" in receiver.actions
+    assert any("motor_restore" in s for s in report.steps)
     assert "reboot" in receiver.actions
     live = parse_bouquet_files(receiver.pull_bouquet_files())
     got = next(f for f in live if f.id == fav.id)
     assert got.channel_refs == manager.get_favorite(fav.id).channel_refs
+
+
+def test_motor_profile_capture_and_inject_roundtrip(tmp_path: Path):
+    from spidervip.channels.motor_profile import (
+        MotorProfile,
+        capture_windows_from_live_prog,
+        inject_captured_windows,
+    )
+
+    name = b"26.0E Ku-band Badr 4/5/6/7"
+    healthy = b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 64
+    wiped = b"\x00" * 32 + name + b"\x00\x00\x00\x00" + b"\x00" * 64
+    windows = capture_windows_from_live_prog(healthy, positions=["26.0E"])
+    assert windows
+    profile = MotorProfile(enabled=True, satellites=windows)
+    merged, n = inject_captured_windows(wiped, profile)
+    assert n == 1
+    assert b"\xaa\x01\x02\x03" in merged
+
+    mgr = FavoriteManager(tmp_path / "ws")
+    mgr.set_motor_profile(profile)
+    loaded = mgr.get_motor_profile()
+    assert loaded.has_capture
+    assert loaded.satellites[0].position == "26.0E"
+
+
+def test_merge_live_prog_preserve_motor_restores_sat_window():
+    from spidervip.channels.live_prog_motor import merge_live_prog_preserve_motor
+
+    name = b"26.0E Ku-band Badr 4/5/6/7"
+    # pre has motor marker 0xAA after the name; post was cleared to 0x00 by reload.
+    pre = b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 96 + b"FAVPRE"
+    post = b"\x00" * 32 + name + b"\x00\x00\x00\x00" + b"\x00" * 96 + b"FAVPOST"
+    merged, n = merge_live_prog_preserve_motor(pre, post, before=8, after=8)
+    assert n == 1
+    assert name in merged
+    assert b"\xaa\x01\x02\x03" in merged
+    assert merged.endswith(b"FAVPOST")
 
 
 def test_favorites_to_bouquet_files_emits_simple_indices(manager: FavoriteManager):

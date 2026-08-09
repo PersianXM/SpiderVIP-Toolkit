@@ -5,13 +5,16 @@ from __future__ import annotations
 import time
 import urllib.error
 import urllib.request
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from .bouquets import parse_bouquet_files
 from .lamedb import parse_lamedb
 from .model import Channel, FavoriteList
 from .telnet_ftp import FTPClient, TelnetClient, probe_tcp
+
+if TYPE_CHECKING:
+    from .motor_profile import MotorProfile
 
 
 class LiveChannelReceiver:
@@ -291,6 +294,11 @@ class LiveChannelReceiver:
         This is the same WebIF path proven for ``satellites.xml`` persistence:
         ``GET /web/servicelistreload?mode=0``. When ``userbouquet.*.tv`` and
         ``*.tv.simple`` are already on disk, favorites are committed too.
+
+        Side effect: firmware also reimports ``satellites.xml`` and runs
+        ``MotorSettingReinit()``, which clears dish Motor/USALS to OFF.
+        Call :meth:`preserve_motor_from_backup` afterwards when a pre-reload
+        ``live_prog`` backup is available.
         """
 
         import urllib.error
@@ -306,15 +314,176 @@ class LiveChannelReceiver:
             raise RuntimeError(f"Unexpected servicelistreload response: {body[:200]}")
         return body
 
-    def restore_bouquet_files(self, files: Dict[str, str]) -> None:
+    def preserve_motor_from_backup(self, remote_backup: str = "/data/gx/live_prog.bak_spidervip") -> int:
+        """Restore per-sat Motor/USALS windows from ``remote_backup`` into live ``live_prog``.
+
+        Uploads the merge helper to the box and runs it there so large binaries
+        are not transferred. Does **not** call servicelistreload again.
+        """
+
+        assert self._telnet is not None
+        import base64
+        from pathlib import Path
+
+        helper = Path(__file__).with_name("live_prog_motor.py").read_bytes()
+        runner = (
+            b"import sys\n"
+            b"from pathlib import Path\n"
+            b"sys.path.insert(0, '/tmp')\n"
+            b"from live_prog_motor import merge_live_prog_preserve_motor\n"
+            b"pre = Path(sys.argv[1]).read_bytes()\n"
+            b"post = Path('/data/gx/live_prog').read_bytes()\n"
+            b"merged, n = merge_live_prog_preserve_motor(pre, post)\n"
+            b"Path('/data/gx/live_prog').write_bytes(merged)\n"
+            b"print(n)\n"
+        )
+
+        def _write_b64(remote: str, data: bytes) -> None:
+            assert self._telnet is not None
+            payload = base64.b64encode(data).decode("ascii")
+            tmp_b64 = remote + ".b64"
+            self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
+            for i in range(0, len(payload), 200):
+                part = payload[i : i + 200]
+                self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
+            self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
+
+        _write_b64("/tmp/live_prog_motor.py", helper)
+        _write_b64("/tmp/spidervip_motor_merge_run.py", runner)
+        safe_bak = remote_backup.replace("'", "'\\''")
+        # Refuse to merge when live_prog shrank badly after reload (corrupt import).
+        sizes = self._telnet.run(
+            f"wc -c /data/gx/live_prog '{safe_bak}' | awk '{{print $1}}'"
+        ).split()
+        if len(sizes) >= 2:
+            try:
+                live_sz, bak_sz = int(sizes[0]), int(sizes[1])
+            except ValueError:
+                live_sz = bak_sz = 0
+            if bak_sz > 0 and live_sz < int(bak_sz * 0.95):
+                raise RuntimeError(
+                    f"live_prog shrank after reload ({live_sz} < 95% of backup {bak_sz}); "
+                    "refusing motor merge to avoid further corruption"
+                )
+        out = self._telnet.run(
+            f"python3 /tmp/spidervip_motor_merge_run.py '{safe_bak}'; sync",
+            timeout=120.0,
+        )
+        try:
+            return int(out.strip().splitlines()[-1])
+        except Exception as exc:
+            raise RuntimeError(f"motor preserve failed: {out[:200]}") from exc
+
+    def pull_live_prog_bytes(self) -> bytes:
+        """Download ``/data/gx/live_prog`` via base64 over Telnet."""
+
+        assert self._telnet is not None
+        import base64
+        import re
+
+        encoded = self._telnet.run("base64 /data/gx/live_prog", timeout=180.0)
+        compact = "".join(encoded.split())
+        if not compact or not re.fullmatch(r"[A-Za-z0-9+/=]+", compact):
+            raise RuntimeError("failed to read live_prog as base64")
+        return base64.b64decode(compact)
+
+    def apply_motor_profile(
+        self,
+        profile: "MotorProfile | object",
+        *,
+        live_prog_backup: str = "/data/gx/live_prog.bak_spidervip",
+    ) -> Dict[str, object]:
+        """Restore Motor after Favorite commit using profile capture and/or backup."""
+
+        assert self._telnet is not None
+        import base64
+        import json
+        from pathlib import Path
+
+        from .motor_profile import MotorProfile
+
+        if not isinstance(profile, MotorProfile):
+            profile = MotorProfile.from_dict(profile)  # type: ignore[arg-type]
+        if not profile.enabled:
+            return {"method": "disabled", "restored": 0}
+
+        # Common path: no Pull-time capture — merge sat windows from pre-apply backup.
+        if not profile.has_capture:
+            restored = self.preserve_motor_from_backup(live_prog_backup)
+            return {"method": "pre_apply_backup", "restored": restored}
+
+        helper = Path(__file__).with_name("live_prog_motor.py").read_bytes()
+        profile_mod = Path(__file__).with_name("motor_profile.py").read_bytes()
+        profile_json = json.dumps(profile.to_dict()).encode("utf-8")
+        runner = (
+            b"import json, sys\n"
+            b"from pathlib import Path\n"
+            b"sys.path.insert(0, '/tmp')\n"
+            b"from motor_profile import MotorProfile, restore_motor_into_live_prog\n"
+            b"profile = MotorProfile.from_dict(json.loads(Path('/tmp/spidervip_motor_profile.json').read_text()))\n"
+            b"post = Path('/data/gx/live_prog').read_bytes()\n"
+            b"pre = Path(sys.argv[1]).read_bytes() if Path(sys.argv[1]).is_file() else None\n"
+            b"merged, method, n = restore_motor_into_live_prog(post_reload=post, pre_reload=pre, profile=profile)\n"
+            b"Path('/data/gx/live_prog').write_bytes(merged)\n"
+            b"print(method)\n"
+            b"print(n)\n"
+        )
+
+        def _write_b64(remote: str, data: bytes) -> None:
+            assert self._telnet is not None
+            payload = base64.b64encode(data).decode("ascii")
+            tmp_b64 = remote + ".b64"
+            self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
+            for i in range(0, len(payload), 200):
+                part = payload[i : i + 200]
+                self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
+            self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
+
+        _write_b64("/tmp/live_prog_motor.py", helper)
+        _write_b64("/tmp/motor_profile.py", profile_mod)
+        _write_b64("/tmp/spidervip_motor_profile.json", profile_json)
+        _write_b64("/tmp/spidervip_motor_apply_run.py", runner)
+        safe_bak = live_prog_backup.replace("'", "'\\''")
+        sizes = self._telnet.run(
+            f"wc -c /data/gx/live_prog '{safe_bak}' 2>/dev/null | awk '{{print $1}}'"
+        ).split()
+        if len(sizes) >= 2:
+            try:
+                live_sz, bak_sz = int(sizes[0]), int(sizes[1])
+            except ValueError:
+                live_sz = bak_sz = 0
+            if bak_sz > 0 and live_sz < int(bak_sz * 0.95):
+                raise RuntimeError(
+                    f"live_prog shrank after reload ({live_sz} < 95% of backup {bak_sz}); "
+                    "refusing motor restore"
+                )
+        out = self._telnet.run(
+            f"python3 /tmp/spidervip_motor_apply_run.py '{safe_bak}'; sync",
+            timeout=120.0,
+        )
+        lines = [ln.strip() for ln in out.strip().splitlines() if ln.strip()]
+        if len(lines) < 2:
+            raise RuntimeError(f"motor profile apply failed: {out[:200]}")
+        try:
+            restored = int(lines[-1])
+        except ValueError as exc:
+            raise RuntimeError(f"motor profile apply failed: {out[:200]}") from exc
+        return {"method": lines[-2], "restored": restored}
+
+    def restore_bouquet_files(self, files: Dict[str, str], *, commit: bool = False) -> None:
+        """Write bouquet files back to enigma_db.
+
+        ``commit=False`` by default: calling ``servicelistreload`` here would
+        reimport satellites.xml / run MotorSettingReinit and can destroy a
+        freshly restored ``live_prog`` backup. Apply rollback restores
+        ``live_prog`` separately and must not reload afterwards.
+        """
+
         self.push_bouquet_files(files, staging=False)
         assert self._telnet is not None
         self._telnet.run("sync")
-        try:
+        if commit:
             self.commit_service_list()
-        except Exception:
-            # Best-effort; caller may still reboot.
-            pass
 
     def reboot(self) -> None:
         assert self._telnet is not None

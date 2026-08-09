@@ -101,6 +101,22 @@
 
         <div class="card-block">
           <h3>Apply Status</h3>
+          <div id="applyProgress" class="apply-progress" aria-label="Apply progress" hidden>
+            <div class="apply-progress-track">
+              <span class="apply-seg" data-seg="1" title="Prepare"></span>
+              <span class="apply-seg" data-seg="2" title="Upload"></span>
+              <span class="apply-seg" data-seg="3" title="Commit"></span>
+              <span class="apply-seg" data-seg="4" title="Reboot"></span>
+              <span class="apply-seg" data-seg="5" title="Verify"></span>
+            </div>
+            <div class="apply-progress-labels">
+              <span>Prepare</span>
+              <span>Upload</span>
+              <span>Commit</span>
+              <span>Reboot</span>
+              <span>Verify</span>
+            </div>
+          </div>
           <div id="applyStatus" class="status-box">Idle</div>
           <ol id="applySteps" class="steps"></ol>
         </div>

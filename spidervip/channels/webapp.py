@@ -195,15 +195,18 @@ def make_handler(app: ChannelApp):
                             "channels": [c.to_dict() for c in snap.channels],
                             "grouped": grouped,
                             "favorites": app.manager.favorites_with_channels(),
+                            "motor_profile": app.manager.get_motor_profile().to_dict(),
                             "apply": app.last_apply,
                             "pipeline": app.pipeline.status,
                             "persistence_warning": (
-                                "Apply commits Favorites into /data/gx/live_prog via "
-                                "bouquet + .simple files and WebIF servicelistreload "
-                                "(same commit path as satellites.xml)."
+                                "Apply commits Favorites into live_prog and restores Motor "
+                                "from the pre-apply backup automatically."
                             ),
                         },
                     )
+
+                if path == "/api/motor-profile":
+                    return self._json(200, {"profile": app.manager.get_motor_profile().to_dict()})
 
                 if path == "/api/receiver/status":
                     return self._json(200, app.connection_status())
@@ -343,6 +346,13 @@ def make_handler(app: ChannelApp):
                 if path == "/api/receiver/pull":
                     result = app.pull_from_receiver()
                     return self._json(200, result)
+
+                if path == "/api/motor-profile":
+                    from .motor_profile import MotorProfile
+
+                    profile = MotorProfile.from_dict(data.get("profile") or data)
+                    app.manager.set_motor_profile(profile)
+                    return self._json(200, {"ok": True, "profile": profile.to_dict()})
 
                 if path == "/api/receiver/apply":
                     if not app._op_lock.acquire(blocking=False):

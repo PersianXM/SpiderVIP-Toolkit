@@ -147,6 +147,7 @@ class SimulatedChannelReceiver:
     def backup_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> str:
         self.actions.append("backup_live_prog")
         self._live_prog_backup = copy.deepcopy(self._factory_files)
+        self._motor_cleared = False
         return remote_path
 
     def restore_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> None:
@@ -160,17 +161,48 @@ class SimulatedChannelReceiver:
         self.actions.append("commit_service_list")
         # New master snapshot = currently activated bouquet files.
         self._factory_files = copy.deepcopy(self._live_files)
+        # Mirror firmware side-effect: MotorSettingReinit clears motor markers.
+        self._motor_cleared = True
         return "<e2state>True</e2state><e2statetext>reloaded both</e2statetext>"
 
-    def restore_bouquet_files(self, files: Dict[str, str]) -> None:
+    def preserve_motor_from_backup(self, remote_backup: str = "/data/gx/live_prog.bak_spidervip") -> int:
+        self.actions.append("preserve_motor_from_backup")
+        if getattr(self, "_live_prog_backup", None) is None:
+            return 0
+        # Favorites stay in _factory_files (post-commit); motor flag restored.
+        self._motor_cleared = False
+        return 1
+
+    def pull_live_prog_bytes(self) -> bytes:
+        self.actions.append("pull_live_prog_bytes")
+        # Tiny synthetic live_prog with one sat name so capture works in simulate.
+        name = b"26.0E Ku-band Badr 4/5/6/7"
+        return b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 64
+
+    def apply_motor_profile(self, profile, *, live_prog_backup: str = "") -> dict:
+        self.actions.append("apply_motor_profile")
+        # Prefer profile path; always clear the simulated wipe flag.
+        self._motor_cleared = False
+        has_capture = False
+        try:
+            has_capture = bool(getattr(profile, "has_capture", False) or profile.get("captured_live_prog_b64"))
+        except Exception:
+            has_capture = False
+        if has_capture:
+            return {"method": "profile_windows", "restored": 1}
+        if getattr(self, "_live_prog_backup", None) is not None:
+            return {"method": "pre_apply_backup", "restored": 1}
+        return {"method": "nothing_to_restore", "restored": 0}
+
+    def restore_bouquet_files(self, files: Dict[str, str], *, commit: bool = False) -> None:
         self._live_files = dict(files)
         self._favorites = parse_bouquet_files(self._live_files)
         self.actions.append("restore")
-        # Keep simulator aligned with live receiver restore+reload behavior.
-        try:
-            self.commit_service_list()
-        except Exception:
-            pass
+        if commit:
+            try:
+                self.commit_service_list()
+            except Exception:
+                pass
 
     def reboot(self) -> None:
         self.actions.append("reboot")

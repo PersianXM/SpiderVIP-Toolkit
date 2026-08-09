@@ -325,6 +325,25 @@ class FavoriteManager:
                 out.append(payload)
             return out
 
+    # --- motor profile -----------------------------------------------------
+    @property
+    def motor_profile_path(self) -> Path:
+        return self.workspace_dir / "motor_profile.json"
+
+    def get_motor_profile(self):
+        from .motor_profile import load_motor_profile
+
+        with self._lock:
+            return load_motor_profile(self.motor_profile_path)
+
+    def set_motor_profile(self, profile) -> None:
+        from .motor_profile import MotorProfile, save_motor_profile
+
+        if not isinstance(profile, MotorProfile):
+            profile = MotorProfile.from_dict(profile)
+        with self._lock:
+            save_motor_profile(self.motor_profile_path, profile)
+
     # --- helpers -----------------------------------------------------------
     def _require(self, favorite_id: str) -> FavoriteList:
         for fav in self._snapshot.favorites:
