@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpiderVIP · Channel & Favorite Manager</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="mark">SV</span>
+        <div>
+          <h1>Channel & Favorite Manager</h1>
+          <p class="sub">Edit locally · Backup safely · Apply after reboot</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="connStatus" class="conn-status offline" title="Checking receiver connection…">
+          <span class="conn-dot" aria-hidden="true"></span>
+        </span>
+        <button id="btnPull" class="ghost" title="Pull from receiver">Pull</button>
+        <button id="btnApply" class="primary" title="Upload favorites and reboot">Apply to Receiver</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+
+    <main class="grid">
+      <section class="panel" id="channelsPanel">
+        <div class="panel-head">
+          <h2>Channels</h2>
+          <span id="channelCount" class="muted"></span>
+        </div>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Search name, number, satellite…" />
+          <select id="satFilter"><option value="">All satellites</option></select>
+          <select id="hdFilter">
+            <option value="1" selected>HD only</option>
+            <option value="0">SD only</option>
+            <option value="">HD + SD</option>
+          </select>
+        </div>
+        <div class="sort-row ch-multi-row">
+          <button id="btnChSelectAll" class="chip" type="button">Select all</button>
+          <button id="btnChClearSel" class="chip" type="button">Clear</button>
+          <span id="chSelCount" class="muted hint">Multi-select, then drag together to Favorites</span>
+        </div>
+        <div id="channelList" class="scroll list"></div>
+      </section>
+
+      <section class="panel" id="favPanel">
+        <div class="panel-head">
+          <h2>Favorites</h2>
+          <button id="btnNewFav" class="ghost compact">+ New</button>
+        </div>
+        <div id="favTabs" class="tabs"></div>
+        <div class="sort-row">
+          <span class="muted">Order</span>
+          <button data-sort="name" class="chip">Name</button>
+          <button data-sort="number" class="chip">Number</button>
+          <button data-sort="satellite" class="chip">Satellite</button>
+        </div>
+        <div class="sort-row fav-multi-row">
+          <button id="btnFavSelectAll" class="chip" type="button">Select all</button>
+          <button id="btnFavClearSel" class="chip" type="button">Clear</button>
+          <button id="btnFavMoveUp" class="chip" type="button" title="Move selected up">↑ Up</button>
+          <button id="btnFavMoveDown" class="chip" type="button" title="Move selected down">↓ Down</button>
+          <span id="favSelCount" class="muted hint">Multi-select, then move together</span>
+        </div>
+        <div id="favDropZone" class="drop-zone">
+          <div id="favChannels" class="scroll list"></div>
+        </div>
+      </section>
+
+      <section class="panel ops" id="opsPanel">
+        <div class="panel-head"><h2>Operations</h2></div>
+
+        <div class="card-block">
+          <h3>Backup</h3>
+          <p class="muted">Versioned JSON with channel mapping and order.</p>
+          <div class="row">
+            <button id="btnBackup" class="ghost">Create Backup</button>
+            <a id="btnDownloadBackup" class="ghost linkbtn" href="/api/backup/download">Download</a>
+          </div>
+        </div>
+
+        <div class="card-block">
+          <h3>Restore / Import</h3>
+          <input id="restoreFile" type="file" accept="application/json,.json" />
+          <div id="restorePreview" class="preview" hidden></div>
+          <button id="btnRestore" class="ghost" disabled>Restore into Workspace</button>
+        </div>
+
+        <div class="card-block">
+          <h3>Online Update</h3>
+          <div id="updateList" class="update-list muted">Loading catalog…</div>
+        </div>
+
+        <div class="card-block">
+          <h3>Apply Status</h3>
+          <div id="applyStatus" class="status-box">Idle</div>
+          <ol id="applySteps" class="steps"></ol>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-body">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmText"></p>
+      <div class="row end">
+        <button value="cancel" class="ghost">Cancel</button>
+        <button value="ok" class="primary" id="confirmOk">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

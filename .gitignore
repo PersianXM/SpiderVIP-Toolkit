@@ -23,17 +23,22 @@ build/**
 patches/usr/local/dbgbar/dbgbar
 
 # Runtime and test artifacts
+.venv/
+venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
 *.log
 *.tmp
 *.bak
-.pytest_cache/
-.coverage
+dist/
+
+# Local channel manager workspace (receiver snapshots, backups)
+.spidervip_channels/
 
 # Local environments and editor state
-.venv/
-venv/
 .env
 .env.*
 .idea/

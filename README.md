@@ -89,6 +89,22 @@ spidervip repair   --simulate --fault demux-stuck --fault audio-muted
 pytest -q
 ```
 
+### Channel & Favorite Manager
+
+داشبورد محلی برای مدیریت کانال‌ها و Favorite، Backup/Restore نسخه‌دار، Online Update،
+و Upload امن با Staging → Reboot → Verify (در صورت بازنویسی توسط `live_prog`، Rollback
+خودکار):
+
+```bash
+spidervip channels dashboard --simulate
+# مرورگر: http://127.0.0.1:8765/
+spidervip channels list --simulate
+spidervip channels backup --simulate -o favorites.json
+spidervip channels apply --simulate
+```
+
+روی رسیور واقعی به‌جای `--simulate` از `--host <IP>` استفاده کنید (Telnet + FTP).
+
 ## فهرست مستندات
 
 ### مبانی فریمویر و دستگاه
