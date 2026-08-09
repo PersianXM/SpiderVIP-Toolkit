@@ -1,4 +1,4 @@
-# SpiderVIP Firmware Patch
+# SpiderVIP Toolkit
 
 مجموعهٔ مستندات، ابزارهای تحلیل و patchهای برگشت‌پذیر برای فریمویر
 `Spider VIP v1.00.92` روی پلتفرم `HiSilicon Hi3798MV300`، به‌همراه ابزار عیب‌یابی

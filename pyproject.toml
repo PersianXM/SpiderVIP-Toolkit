@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spidervip-firmware-patch"
+name = "spidervip-toolkit"
 version = "0.1.0"
 description = "SpiderVIP toolkit: A/V freeze diagnose/repair, channel & favorite management, and frequency/TP sync"
 readme = "README.md"
