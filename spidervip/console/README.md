@@ -7,36 +7,30 @@ Unified local dashboard shell for SpiderVIP topics.
 - EN: **SpiderVIP Console**
 - FA: **کنسول SpiderVIP**
 
-## Phase 1 (current)
-
-One host/port with a shell plus mounted topic UIs:
-
-```text
-http://127.0.0.1:8787/               shell
-http://127.0.0.1:8787/frequencies/   Frequency Manager
-http://127.0.0.1:8787/channels/      Channel & Favorite Manager
-```
-
-Run:
+## Run
 
 ```powershell
-python -m pip install "spidervip-toolkit[console]"
-# or: python -m pip install flask requests beautifulsoup4
+python -m pip install flask requests beautifulsoup4
 python -m spidervip.cli console --simulate
-```
-
-Live channels backend:
-
-```powershell
+# live:
 python -m spidervip.cli console --host 192.168.100.102
 ```
 
-Topic dashboards can still be started separately (`channels dashboard`, `frequency/app.py`).
+- Shell + shared connection: `http://127.0.0.1:8787/`
+- Frequencies: `/frequencies/`
+- Channels: `/channels/`
 
-## Later phases
+## Phase 2 — shared connection
 
-- Shared receiver connection panel
+The shell stores IP/user/password (`.spidervip_console/connection.json`) and:
+
+1. probes Telnet/FTP/WebIF
+2. pushes the same credentials into the Channels backend
+3. injects `window.SPIDERVIP_CONNECTION` into both mounted UIs so Frequency forms prefill
+
+## Later
+
 - Apply coordination between frequency and favorites
 - Unified visual language
 
-See [`docs/TOPICS.md`](../../docs/TOPICS.md) and [`docs/console/README.md`](../../docs/console/README.md).
+See [`docs/console/README.md`](../../docs/console/README.md).

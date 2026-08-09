@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 340" fill="none" aria-hidden="true">
+  <!-- Blueprint grid (upper right) -->
+  <g opacity="0.5" stroke="#0B1220" stroke-width="1.15">
+    <path d="M270 24h124M270 42h124M270 60h124M270 78h96"/>
+    <path d="M288 14v78M306 14v78M324 14v78M342 14v70M360 14v52"/>
+  </g>
+
+  <!-- Orange / gold chassis (L-ish stack) -->
+  <rect x="112" y="72" width="176" height="128" rx="30" fill="#FF8A3D" stroke="#0B1220" stroke-width="3.5"/>
+  <rect x="148" y="104" width="162" height="116" rx="26" fill="#FF6B35" stroke="#0B1220" stroke-width="3.5"/>
+
+  <!-- Horizontal prism resting on chassis -->
+  <path d="M168 88h102l16 14H184z" fill="#D0D5DD" stroke="#0B1220" stroke-width="2.5"/>
+  <path d="M168 88v20l16 14V102z" fill="#Aeb4bf" stroke="#0B1220" stroke-width="2.5"/>
+  <rect x="184" y="102" width="102" height="20" fill="#F4F5F7" stroke="#0B1220" stroke-width="2.5"/>
+
+  <!-- Solid black U-arch portal (dish gateway) -->
+  <path
+    d="M148 256V164c0-52 40-88 86-88s86 36 86 88v92h-28V164c0-34-26-58-58-58s-58 24-58 58v92H148z"
+    fill="#0B1220"
+  />
+
+  <!-- Large lime signal circle -->
+  <circle cx="322" cy="196" r="52" fill="#C1E152" stroke="#0B1220" stroke-width="3.5"/>
+
+  <!-- Blue semicircle / data bay + pixels -->
+  <path d="M72 256c0-42 30-74 68-74h10v74H72z" fill="#89CFF0" stroke="#0B1220" stroke-width="3"/>
+  <rect x="92" y="198" width="15" height="15" fill="#F4F5F7" stroke="#0B1220" stroke-width="2"/>
+  <rect x="112" y="214" width="13" height="13" fill="#B8BEC8" stroke="#0B1220" stroke-width="2"/>
+  <rect x="94" y="224" width="11" height="11" fill="#6BB8E0" stroke="#0B1220" stroke-width="2"/>
+
+  <!-- Grey signal steps -->
+  <path d="M40 256h30v-20H40zm0-20h46v-20H40zm0-20h60v-20H40z" fill="#C5CAD3" stroke="#0B1220" stroke-width="2.5"/>
+
+  <!-- Lime capsule module -->
+  <rect x="196" y="216" width="84" height="28" rx="14" fill="#C1E152" stroke="#0B1220" stroke-width="3"/>
+  <circle cx="214" cy="230" r="10" fill="#0B1220"/>
+
+  <!-- Floating isometric cube -->
+  <path d="M56 112l24-14 24 14v26l-24 14-24-14z" fill="#F4F5F7" stroke="#0B1220" stroke-width="2.5"/>
+  <path d="M56 112v26l24 14V126z" fill="#C5CAD3" stroke="#0B1220" stroke-width="2.5"/>
+  <path d="M104 112v26l-24 14V126z" fill="#E4E7EC" stroke="#0B1220" stroke-width="2.5"/>
+
+  <!-- Floating sphere -->
+  <circle cx="352" cy="112" r="24" fill="#F4F5F7" stroke="#0B1220" stroke-width="3"/>
+  <ellipse cx="343" cy="103" rx="9" ry="5.5" fill="#fff" opacity="0.9"/>
+
+  <!-- Right pixel cluster -->
+  <rect x="354" y="226" width="20" height="20" fill="#89CFF0" stroke="#0B1220" stroke-width="2.5"/>
+  <rect x="376" y="238" width="15" height="15" fill="#B8BEC8" stroke="#0B1220" stroke-width="2.5"/>
+  <rect x="360" y="248" width="13" height="13" fill="#F4F5F7" stroke="#0B1220" stroke-width="2.5"/>
+
+  <!-- Ground line + resting sphere -->
+  <path d="M32 258h356" stroke="#0B1220" stroke-width="3.5" stroke-linecap="square"/>
+  <circle cx="298" cy="246" r="13" fill="#F4F5F7" stroke="#0B1220" stroke-width="2.5"/>
+  <ellipse cx="293" cy="241" rx="4.5" ry="2.8" fill="#fff" opacity="0.85"/>
+</svg>

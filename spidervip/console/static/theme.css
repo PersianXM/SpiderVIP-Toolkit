@@ -1,0 +1,64 @@
+/* SpiderVIP Console — shared Digigo / neo-brutalist tokens
+   Served at /static/console/theme.css
+   Keep Frequency + Channels embedded :root blocks in sync with this file. */
+
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap");
+
+:root {
+  --sv-page: #fafaf7;
+  --sv-beige: #f0f0e8;
+  --sv-white: #ffffff;
+  --sv-ink: #0b1220;
+  --sv-navy: #121a2a;
+  --sv-muted: #4a5568;
+  --sv-lime: #c1e152;
+  --sv-orange: #ff6b35;
+  --sv-sky: #89cff0;
+  --sv-danger: #e11d48;
+  --sv-ok: #15803d;
+  --sv-warn: #ca8a04;
+  --sv-line: #0b1220;
+  --sv-line-soft: rgba(11, 18, 32, 0.14);
+
+  --sv-radius-sm: 12px;
+  --sv-radius-md: 18px;
+  --sv-radius-lg: 26px;
+  --sv-radius-pill: 999px;
+
+  --sv-border: 2.5px solid var(--sv-ink);
+  --sv-border-thin: 2px solid var(--sv-ink);
+  --sv-shadow-hard: 4px 4px 0 var(--sv-ink);
+  --sv-shadow-hard-sm: 3px 3px 0 var(--sv-ink);
+
+  --sv-font: "Vazirmatn", "Sora", "Segoe UI", system-ui, sans-serif;
+  --sv-font-display: "Sora", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+
+  --sv-focus: 0 0 0 3px rgba(137, 207, 240, 0.55);
+  --sv-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Legacy aliases used by module CSS during migration */
+  --bg: var(--sv-page);
+  --text: var(--sv-ink);
+  --muted: var(--sv-muted);
+  --ink: var(--sv-ink);
+  --accent: var(--sv-lime);
+  --brand: var(--sv-orange);
+  --radius: var(--sv-radius-lg);
+  --font: var(--sv-font);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

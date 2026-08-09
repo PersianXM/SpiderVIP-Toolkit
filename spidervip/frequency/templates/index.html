@@ -3,45 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b0d12">
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#C1E152">
+  <meta name="color-scheme" content="light">
   <meta name="app-ui-version" content="polish-v1">
   <title>مدیریت فرکانس — SpiderVIP</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0d12' stroke='%230a84ff' stroke-width='2'/%3E%3Cellipse cx='16' cy='16' rx='6' ry='3' fill='none' stroke='%2330d158' stroke-width='1.5' transform='rotate(-30 16 16)'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%230a84ff'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
+    /* Digigo neo-brutalist — tokens mirror Console theme.css for standalone */
     :root {
-      --bg: #0b0d12;
-      --bg-elevated: #11141b;
-      --card: rgba(28, 32, 42, 0.88);
-      --card-solid: #1c2028;
-      --chrome-border: rgba(255, 255, 255, 0.08);
-      --chrome-edge: rgba(255, 255, 255, 0.14);
-      --accent: #0a84ff;
-      --accent-fg: #ffffff;
-      --accent2: #30d158;
-      --accent2-fg: #04210f;
-      --danger: #ff453a;
-      --danger-fg: #2a0606;
-      --warn: #ffd60a;
-      --info: #64d2ff;
-      --text: #f5f5f7;
-      --text-secondary: #c7c7cc;
-      --muted: #aeaeb2;
-      --border: rgba(255, 255, 255, 0.10);
-      --t-both: rgba(48, 209, 88, 0.10);
-      --t-rec: rgba(255, 214, 10, 0.10);
-      --t-lyn: rgba(100, 210, 255, 0.10);
-      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-      --r-sm: 10px;
-      --r-md: 14px;
-      --r-lg: 20px;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,.30), 0 0 0 1px rgba(255,255,255,.04) inset;
-      --shadow-md: 0 8px 24px rgba(0,0,0,.34), 0 0 0 1px rgba(255,255,255,.05) inset;
-      --focus-ring: 0 0 0 3px rgba(10,132,255,.35);
+      --sv-page: #fafaf7;
+      --sv-beige: #f0f0e8;
+      --sv-white: #ffffff;
+      --sv-ink: #0b1220;
+      --sv-navy: #121a2a;
+      --sv-muted: #4a5568;
+      --sv-lime: #c1e152;
+      --sv-orange: #ff6b35;
+      --sv-sky: #89cff0;
+      --sv-danger: #e11d48;
+      --sv-ok: #15803d;
+      --sv-warn: #ca8a04;
+      --sv-border: 2.5px solid #0b1220;
+      --sv-border-thin: 2px solid #0b1220;
+      --sv-shadow-hard: 4px 4px 0 #0b1220;
+      --sv-shadow-hard-sm: 3px 3px 0 #0b1220;
+      --sv-radius-sm: 12px;
+      --sv-radius-md: 18px;
+      --sv-radius-lg: 26px;
+      --sv-radius-pill: 999px;
+      --sv-focus: 0 0 0 3px rgba(137, 207, 240, 0.55);
+      --sv-ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --sv-font: "Vazirmatn", "Sora", "Segoe UI", system-ui, sans-serif;
+      --sv-font-display: "Sora", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+
+      --bg: var(--sv-page);
+      --bg-elevated: var(--sv-beige);
+      --card: var(--sv-white);
+      --card-solid: var(--sv-white);
+      --chrome-border: var(--sv-ink);
+      --chrome-edge: var(--sv-ink);
+      --accent: var(--sv-lime);
+      --accent-fg: var(--sv-ink);
+      --accent2: var(--sv-lime);
+      --accent2-fg: var(--sv-ink);
+      --danger: var(--sv-danger);
+      --danger-fg: #fff;
+      --warn: var(--sv-warn);
+      --info: #1d6fa5;
+      --text: var(--sv-ink);
+      --text-secondary: var(--sv-muted);
+      --muted: var(--sv-muted);
+      --border: rgba(11, 18, 32, 0.18);
+      --t-both: rgba(193, 225, 82, 0.28);
+      --t-rec: rgba(255, 107, 53, 0.14);
+      --t-lyn: rgba(137, 207, 240, 0.35);
+      --ease-out: var(--sv-ease);
+      --r-sm: var(--sv-radius-sm);
+      --r-md: var(--sv-radius-md);
+      --r-lg: var(--sv-radius-lg);
+      --shadow-sm: none;
+      --shadow-md: var(--sv-shadow-hard-sm);
+      --focus-ring: var(--sv-focus);
     }
 
     * { box-sizing: border-box; }
@@ -49,75 +75,103 @@
 
     body {
       margin: 0;
-      font: 100%/1.6 "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+      font: 100%/1.6 var(--sv-font);
       color: var(--text);
       background:
-        radial-gradient(900px 520px at 88% -8%, rgba(10,132,255,.07), transparent 55%),
-        var(--bg);
+        radial-gradient(900px 480px at 95% -5%, rgba(193, 225, 82, 0.25), transparent 55%),
+        radial-gradient(700px 400px at -5% 20%, rgba(137, 207, 240, 0.2), transparent 50%),
+        var(--sv-page);
       min-height: 100vh;
-      font-optical-sizing: auto;
       -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
     }
 
     .wrap {
       max-width: 1040px;
       margin: 0 auto;
-      padding: 32px 20px 96px;
+      padding: 28px 20px 96px;
     }
 
-    /* ---- Header ---- */
     .site-header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 22px;
+      padding: 14px 18px;
+      background: var(--sv-navy);
+      color: #fff;
+      border: var(--sv-border);
+      border-radius: var(--sv-radius-lg);
+      box-shadow: var(--sv-shadow-hard);
     }
     .site-logo {
       flex-shrink: 0;
       width: 48px;
       height: 48px;
-      border-radius: 14px;
-      background: linear-gradient(145deg, rgba(10,132,255,.18), rgba(48,209,88,.12));
-      border: 1px solid var(--chrome-border);
+      border-radius: 50%;
+      background: var(--sv-lime);
+      border: var(--sv-border-thin);
       display: grid;
       place-items: center;
-      box-shadow: var(--shadow-sm);
+      color: var(--sv-ink);
     }
     .site-logo svg { display: block; }
+    .site-logo svg ellipse,
+    .site-logo svg circle { stroke: var(--sv-ink); fill: var(--sv-ink); }
+    .site-logo svg ellipse { fill: none; }
     .site-header-text { flex: 1; min-width: 0; }
     h1 {
-      font-size: clamp(1.5rem, 1.1rem + 2vw, 2.2rem);
-      line-height: 1.12;
+      font-family: var(--sv-font-display);
+      font-size: clamp(1.35rem, 1rem + 1.6vw, 1.85rem);
+      line-height: 1.15;
       letter-spacing: -0.02em;
       font-weight: 700;
-      margin: 0 0 6px;
+      margin: 0 0 4px;
+      color: #fff;
     }
-    h1 .brand-en {
-      color: var(--text);
-      font-weight: 700;
-    }
-    h1 .brand-sep {
-      color: var(--muted);
-      font-weight: 400;
-      margin: 0 0.35em;
-    }
-    h1 .brand-fa { color: var(--text); }
+    h1 .brand-en, h1 .brand-fa { color: #fff; }
+    h1 .brand-sep { color: rgba(255,255,255,0.45); font-weight: 400; margin: 0 0.35em; }
     .sub {
-      color: var(--text-secondary);
+      color: rgba(255,255,255,0.72);
       margin: 0;
-      font-size: 0.95rem;
-      line-height: 1.55;
+      font-size: 0.9rem;
+      line-height: 1.5;
       max-width: 65ch;
     }
 
-    /* ---- Stepper ---- */
+    .fetch-panel .step-title { margin-bottom: 6px; }
+    .fetch-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .fetch-actions #loadBtn {
+      min-height: 44px;
+      padding-inline: 16px;
+    }
+    .console-conn-link {
+      color: var(--sv-ink);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      margin-inline-start: auto;
+      padding: 6px 12px;
+      border: var(--sv-border-thin);
+      border-radius: var(--sv-radius-pill);
+      background: var(--sv-sky);
+    }
+    .console-conn-link:hover { box-shadow: var(--sv-shadow-hard-sm); }
+    body.console-embedded .standalone-creds { display: none !important; }
+    body:not(.console-embedded) .console-conn-link { display: none !important; }
+    .standalone-creds { margin-bottom: 12px; }
+
     .stepper {
-      margin-bottom: 28px;
+      margin-bottom: 22px;
       padding: 16px 18px;
-      background: rgba(0,0,0,.22);
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
+      background: var(--sv-beige);
+      border: var(--sv-border);
+      border-radius: var(--sv-radius-md);
     }
     .stepper-list {
       list-style: none;
@@ -132,36 +186,35 @@
       text-align: center;
       position: relative;
     }
-    .stepper-item:not(:last-child)::after {
-      content: "";
-      position: absolute;
-      top: 14px;
-      left: -3px;
-      width: calc(50% - 14px);
-      height: 2px;
-      background: var(--border);
-      transform: translateX(-100%);
-    }
+    .stepper-item:not(:last-child)::after,
     .stepper-item:not(:first-child)::before {
       content: "";
       position: absolute;
       top: 14px;
+      height: 3px;
+      background: rgba(11,18,32,0.2);
+      width: calc(50% - 16px);
+    }
+    .stepper-item:not(:last-child)::after {
+      left: -3px;
+      transform: translateX(-100%);
+    }
+    .stepper-item:not(:first-child)::before {
       right: -3px;
-      width: calc(50% - 14px);
-      height: 2px;
-      background: var(--border);
       transform: translateX(100%);
     }
     .stepper-item.done:not(:first-child)::before,
     .stepper-item.done + .stepper-item::after,
-    .stepper-item.active:not(:first-child)::before { background: var(--accent); opacity: 0.5; }
+    .stepper-item.active:not(:first-child)::before {
+      background: var(--sv-lime);
+    }
     .stepper-dot {
       width: 28px;
       height: 28px;
       margin: 0 auto 6px;
       border-radius: 50%;
-      border: 2px solid var(--border);
-      background: var(--card-solid);
+      border: var(--sv-border-thin);
+      background: var(--sv-white);
       display: grid;
       place-items: center;
       font-size: 0.75rem;
@@ -169,17 +222,14 @@
       color: var(--muted);
       position: relative;
       z-index: 1;
-      transition: border-color .25s, background .25s, color .25s;
     }
     .stepper-item.active .stepper-dot {
-      border-color: var(--accent);
-      background: rgba(10,132,255,.15);
-      color: var(--accent);
+      background: var(--sv-lime);
+      color: var(--sv-ink);
     }
     .stepper-item.done .stepper-dot {
-      border-color: var(--accent2);
-      background: rgba(48,209,88,.18);
-      color: var(--accent2);
+      background: var(--sv-sky);
+      color: var(--sv-ink);
     }
     .stepper-label {
       display: block;
@@ -188,57 +238,39 @@
       line-height: 1.3;
       padding: 0 2px;
     }
-    .stepper-item.active .stepper-label { color: var(--text); font-weight: 600; }
+    .stepper-item.active .stepper-label { color: var(--text); font-weight: 700; }
     .stepper-item.done .stepper-label { color: var(--text-secondary); }
 
-    /* ---- Cards ---- */
     .card {
       position: relative;
       background: var(--card);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
-      border: 1px solid var(--chrome-border);
+      border: var(--sv-border);
       border-radius: var(--r-lg);
       padding: 24px 26px;
       margin-bottom: 20px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--sv-shadow-hard-sm);
     }
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--chrome-edge), transparent);
-      border-radius: inherit;
-      pointer-events: none;
-    }
+    .card::before { display: none; }
     .hidden { display: none !important; }
 
-    /* Compare / deploy: fully hidden until ready (progressive disclosure) */
     .compare-block,
-    .done-block {
-      margin-bottom: 20px;
-    }
+    .done-block { margin-bottom: 20px; }
     .compare-block:not(.is-ready),
-    .done-block:not(.is-ready) {
-      display: none;
-    }
+    .done-block:not(.is-ready) { display: none; }
     .compare-shell,
     .done-shell {
       position: relative;
       background: var(--card-solid);
-      border: 1px solid var(--chrome-border);
+      border: var(--sv-border);
       border-radius: var(--r-lg);
       padding: 20px 22px 24px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--sv-shadow-hard-sm);
     }
     .compare-shell .step-title {
       justify-content: flex-start;
       margin: 0 0 8px;
     }
-    .compare-shell .step-title::before {
-      display: none;
-    }
+    .compare-shell .step-title::before { display: none; }
     .compare-shell .sub-compact {
       text-align: start;
       margin: 0 0 16px;
@@ -251,10 +283,11 @@
     }
 
     .step-title {
+      font-family: var(--sv-font-display);
       font-size: 1.05rem;
       color: var(--text);
       margin: 0 0 14px;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: -0.01em;
       display: flex;
       align-items: center;
@@ -262,9 +295,11 @@
     }
     .step-title::before {
       content: "";
-      width: 4px; height: 16px;
-      border-radius: 2px;
-      background: var(--accent);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--sv-lime);
+      border: 2px solid var(--sv-ink);
       flex-shrink: 0;
     }
     .step-title.sm { font-size: 0.96rem; margin-top: 8px; }
@@ -275,7 +310,7 @@
       margin-bottom: 8px;
       font-size: 0.86rem;
       color: var(--text-secondary);
-      font-weight: 500;
+      font-weight: 600;
     }
     .row {
       display: flex;
@@ -288,92 +323,89 @@
     .row-action { margin-bottom: 12px; }
     .toolbar-top { margin-top: 18px; }
 
-    /* ---- Inputs ---- */
     input[type=text], input[type=password], select {
       flex: 1 1 320px;
       padding: 12px 14px;
       border-radius: var(--r-sm);
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.25);
+      border: var(--sv-border-thin);
+      background: var(--sv-beige);
       color: var(--text);
       font-size: 0.95rem;
       font-family: inherit;
-      transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out), background .2s;
+      transition: box-shadow .2s var(--ease-out), background .2s;
     }
     input.ltr { direction: ltr; text-align: left; }
     input.flex-host { flex: 1 1 200px; }
     input.flex-narrow { flex: 0 1 110px; }
     input[type=text]:focus, input[type=password]:focus, select:focus {
       outline: none;
-      border-color: var(--accent);
       box-shadow: var(--focus-ring);
-      background: rgba(0,0,0,0.40);
+      background: var(--sv-white);
     }
     select { cursor: pointer; }
     select.is-loading { color: var(--muted); }
 
-    /* ---- Buttons ---- */
     button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       padding: 12px 22px;
-      border: none;
-      border-radius: var(--r-sm);
-      background: var(--accent);
+      border: var(--sv-border-thin);
+      border-radius: var(--sv-radius-pill);
+      background: var(--sv-lime);
       color: var(--accent-fg);
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       font-size: 0.93rem;
       font-family: inherit;
       letter-spacing: -0.01em;
-      transition: transform .12s var(--ease-out), filter .2s, opacity .2s, box-shadow .2s;
-      box-shadow: var(--shadow-sm);
+      transition: transform .12s var(--ease-out), box-shadow .15s;
       user-select: none;
     }
-    button:hover { filter: brightness(1.08); }
-    button:active { transform: scale(0.96); }
+    button:hover { box-shadow: var(--sv-shadow-hard-sm); transform: translateY(-1px); }
+    button:active { transform: translateY(1px); box-shadow: none; }
     button:focus-visible {
       outline: none;
-      box-shadow: var(--focus-ring), var(--shadow-sm);
+      box-shadow: var(--focus-ring);
     }
-    button.secondary { background: var(--accent2); color: var(--accent2-fg); }
-    button.danger { background: var(--danger); color: var(--danger-fg); }
+    button.secondary {
+      background: var(--sv-lime);
+      color: var(--sv-ink);
+    }
+    button.danger {
+      background: var(--sv-orange);
+      color: #fff;
+    }
     button.ghost {
-      background: rgba(255,255,255,0.06);
+      background: var(--sv-white);
       color: var(--text);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(8px);
+      border: var(--sv-border-thin);
     }
     button.ghost.btn-lyn {
-      color: #b8ecff;
-      border-color: rgba(100, 210, 255, 0.28);
-      background: rgba(100, 210, 255, 0.08);
+      background: var(--sv-sky);
+      color: var(--sv-ink);
     }
     button.ghost.btn-rec {
-      color: #ffb4ae;
-      border-color: rgba(255, 69, 58, 0.28);
-      background: rgba(255, 69, 58, 0.08);
+      background: #ffe4dc;
+      color: var(--sv-ink);
     }
-    button:disabled { opacity: .40; cursor: not-allowed; transform: none; filter: none; }
+    button:disabled { opacity: .40; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn-icon {
       width: 18px;
       height: 18px;
       flex-shrink: 0;
     }
 
-    /* ---- Status ---- */
     .status {
       margin-top: 14px;
       font-size: 0.88rem;
       min-height: 20px;
       line-height: 1.5;
     }
-    .status.err { color: #ff9a96; }
-    .status.ok  { color: #9ef5b0; }
+    .status.err { color: var(--sv-danger); font-weight: 600; }
+    .status.ok  { color: var(--sv-ok); font-weight: 600; }
 
-    /* ---- Toolbar ---- */
     .cmp-toolbar-bar {
       display: flex;
       flex-wrap: wrap;
@@ -381,8 +413,8 @@
       gap: 8px 12px;
       padding: 10px 12px;
       margin: 0 0 12px;
-      background: rgba(0, 0, 0, 0.22);
-      border: 1px solid var(--border);
+      background: var(--sv-beige);
+      border: var(--sv-border-thin);
       border-radius: var(--r-sm);
     }
     .cmp-toolbar-bar .toolbar-actions {
@@ -392,17 +424,18 @@
       gap: 8px;
     }
     .cmp-toolbar-sep {
-      width: 1px;
+      width: 2px;
       height: 24px;
-      background: var(--border);
+      background: var(--sv-ink);
+      opacity: 0.2;
       flex-shrink: 0;
     }
     .cmp-toolbar-bar .check-wrap {
       margin: 0;
       padding: 6px 10px;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border);
+      background: var(--sv-white);
+      border: var(--sv-border-thin);
     }
     .cmp-toolbar-bar .count {
       margin-inline-start: auto;
@@ -436,28 +469,19 @@
       color: var(--text-secondary);
       font-size: 0.84rem;
       font-variant-numeric: tabular-nums;
-      font-weight: 600;
+      font-weight: 700;
       white-space: nowrap;
     }
 
-    /* ---- Table ---- */
     .tablebox {
       max-height: 480px;
       overflow: auto;
-      border: 1px solid var(--border);
+      border: var(--sv-border-thin);
       border-radius: var(--r-md);
-      background: rgba(0,0,0,0.18);
+      background: var(--sv-beige);
       scrollbar-width: thin;
-      scrollbar-color: rgba(255,255,255,.18) transparent;
     }
     .tablebox.compact { max-height: 240px; margin-top: 10px; }
-    .tablebox::-webkit-scrollbar { width: 10px; height: 10px; }
-    .tablebox::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,.16);
-      border-radius: 999px;
-      border: 2px solid transparent;
-      background-clip: content-box;
-    }
     .table-scroll-hint {
       display: none;
       font-size: 0.78rem;
@@ -467,31 +491,30 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td {
       padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid rgba(11,18,32,0.12);
       text-align: center;
     }
     th {
       color: var(--text);
-      font-weight: 600;
+      font-weight: 700;
       position: sticky;
       top: 0;
-      background: rgba(28,32,42,0.92);
-      backdrop-filter: blur(12px);
+      background: var(--sv-white);
       z-index: 1;
+      border-bottom: var(--sv-border-thin);
     }
-    .th-add { width: 60px; color: var(--info); }
-    .th-del { width: 56px; color: var(--danger); }
-    tbody tr { transition: background .2s var(--ease-out); }
-    tbody tr:hover { background: rgba(255,255,255,0.04); }
+    .th-add { width: 60px; color: #1d6fa5; }
+    .th-del { width: 56px; color: var(--sv-danger); }
+    tbody tr { transition: background .15s var(--ease-out); }
+    tbody tr:hover { background: rgba(11,18,32,0.04); }
     .log-cell { text-align: right; direction: rtl; unicode-bidi: plaintext; }
 
-    /* Mobile card layout for comparison rows */
     .cmp-cards { display: none; gap: 10px; }
     .cmp-card-item {
-      border: 1px solid var(--border);
+      border: var(--sv-border-thin);
       border-radius: var(--r-sm);
       padding: 12px 14px;
-      background: rgba(0,0,0,.15);
+      background: var(--sv-white);
     }
     .cmp-card-item.both { background: var(--t-both); }
     .cmp-card-item.receiver_only { background: var(--t-rec); }
@@ -522,15 +545,14 @@
       margin-top: 8px;
       line-height: 1.55;
     }
-    .hint.err { color: #ff9a96; }
+    .hint.err { color: var(--sv-danger); }
     .hint-flush { margin-top: 0; }
     .sub-compact { margin-bottom: 12px; }
 
-    /* ---- Spinner & skeleton ---- */
     .spinner {
       width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,.18);
-      border-top-color: var(--accent);
+      border: 2px solid rgba(11,18,32,.18);
+      border-top-color: var(--sv-ink);
       border-radius: 50%;
       display: inline-block;
       animation: spin .7s linear infinite;
@@ -542,13 +564,13 @@
       flex: 1 1 100%;
       width: 100%;
       border-radius: var(--r-sm);
-      background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 50%, rgba(255,255,255,.04) 75%);
+      background: linear-gradient(90deg, rgba(11,18,32,.05) 25%, rgba(11,18,32,.1) 50%, rgba(11,18,32,.05) 75%);
       background-size: 200% 100%;
       animation: shimmer 1.4s ease infinite;
+      border: var(--sv-border-thin);
     }
     @keyframes shimmer { to { background-position: -200% 0; } }
 
-    /* ---- Chips & legend ---- */
     .cmp-stats {
       display: flex;
       gap: 8px;
@@ -557,23 +579,24 @@
       align-items: center;
       margin: 0 0 12px;
       padding: 12px;
-      background: rgba(0, 0, 0, 0.18);
-      border: 1px solid var(--border);
+      background: var(--sv-beige);
+      border: var(--sv-border-thin);
       border-radius: var(--r-sm);
     }
     .chip {
       padding: 6px 12px;
       border-radius: 999px;
       font-size: 0.82rem;
-      font-weight: 600;
-      border: 1px solid var(--border);
+      font-weight: 700;
+      border: var(--sv-border-thin);
       font-variant-numeric: tabular-nums;
       text-align: center;
+      background: var(--sv-white);
     }
-    .chip.both { background: rgba(48,209,88,.14); color: #9ef5b0; border-color: rgba(48,209,88,.30); }
-    .chip.rec  { background: rgba(255,214,10,.14); color: #ffe999; border-color: rgba(255,214,10,.30); }
-    .chip.lyn  { background: rgba(100,210,255,.14); color: #b8ecff; border-color: rgba(100,210,255,.30); }
-    .chip.tot  { background: rgba(255,255,255,.06); color: var(--text-secondary); }
+    .chip.both { background: var(--sv-lime); }
+    .chip.rec  { background: #ffe4dc; }
+    .chip.lyn  { background: var(--sv-sky); }
+    .chip.tot  { background: var(--sv-white); color: var(--text-secondary); }
 
     .legend-grid {
       display: flex;
@@ -600,8 +623,8 @@
       padding: 0;
       border: none;
     }
-    .legend-note .add-label { color: var(--info); font-weight: 600; }
-    .legend-note .del-label { color: var(--danger); font-weight: 600; }
+    .legend-note .add-label { color: #1d6fa5; font-weight: 700; }
+    .legend-note .del-label { color: var(--sv-danger); font-weight: 700; }
 
     tr.both { background: var(--t-both); }
     tr.receiver_only { background: var(--t-rec); }
@@ -612,10 +635,11 @@
       width: 9px; height: 9px;
       border-radius: 50%;
       flex-shrink: 0;
+      border: 1.5px solid var(--sv-ink);
     }
-    .dot.both { background: var(--accent2); }
-    .dot.rec  { background: var(--warn); }
-    .dot.lyn  { background: var(--info); }
+    .dot.both { background: var(--sv-lime); }
+    .dot.rec  { background: var(--sv-orange); }
+    .dot.lyn  { background: var(--sv-sky); }
 
     .status-tag {
       display: inline-flex;
@@ -642,26 +666,24 @@
       padding: 40px 20px;
       color: var(--text-secondary);
     }
-    .empty-state svg { opacity: 0.35; margin-bottom: 12px; }
+    .empty-state svg { opacity: 0.45; margin-bottom: 12px; }
     .empty-state p { margin: 0; font-size: 0.9rem; }
 
-    /* ---- Pills ---- */
     .pill {
       font-size: 0.74rem;
       padding: 4px 11px;
       border-radius: 999px;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      font-weight: 500;
+      border: var(--sv-border-thin);
+      color: var(--text);
+      background: var(--sv-beige);
+      font-weight: 600;
       white-space: nowrap;
     }
     .pill.live {
-      background: rgba(48,209,88,.14);
-      color: #9ef5b0;
-      border-color: rgba(48,209,88,.30);
+      background: var(--sv-lime);
+      color: var(--sv-ink);
     }
 
-    /* ---- Custom checkbox ---- */
     .check-wrap {
       display: inline-flex;
       align-items: center;
@@ -681,8 +703,8 @@
       width: 20px;
       height: 20px;
       border-radius: 6px;
-      border: 2px solid var(--border);
-      background: rgba(0,0,0,.25);
+      border: var(--sv-border-thin);
+      background: var(--sv-white);
       display: grid;
       place-items: center;
       transition: border-color .15s, background .15s;
@@ -690,45 +712,34 @@
     }
     .check-wrap input:focus-visible + .check-box { box-shadow: var(--focus-ring); }
     .check-wrap input:checked + .check-box {
-      background: var(--accent);
-      border-color: var(--accent);
+      background: var(--sv-lime);
+      border-color: var(--sv-ink);
     }
     .check-wrap input:checked + .check-box::after {
       content: "";
       width: 5px;
       height: 9px;
-      border: solid #fff;
+      border: solid var(--sv-ink);
       border-width: 0 2px 2px 0;
       transform: rotate(45deg);
       margin-top: -2px;
     }
-    .check-wrap.add input:checked + .check-box { background: var(--info); border-color: var(--info); }
-    .check-wrap.del input:checked + .check-box { background: var(--danger); border-color: var(--danger); }
+    .check-wrap.add input:checked + .check-box { background: var(--sv-sky); }
+    .check-wrap.del input:checked + .check-box { background: var(--sv-orange); }
+    .check-wrap.del input:checked + .check-box::after { border-color: #fff; }
 
-    /* ---- Accessibility ---- */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
-      .card { animation: none; }
       button:active { transform: none; }
-    }
-    @media (prefers-reduced-transparency: reduce) {
-      .card, .chip, .pill, button.ghost, th,
-      input[type=text], input[type=password], select {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        background: var(--card-solid);
-      }
-      input[type=text], input[type=password], select { background: #0b0d12; }
     }
     @media (prefers-contrast: more) {
       :root {
-        --card: #1c2028;
-        --border: rgba(255,255,255,.30);
-        --muted: #c7c7cc;
+        --border: rgba(11,18,32,.4);
+        --muted: #2d3748;
       }
     }
 
@@ -739,7 +750,7 @@
     }
 
     @media (max-width: 640px) {
-      .wrap { padding: 20px 14px 80px; }
+      .wrap { padding: 16px 12px 80px; }
       .card { padding: 18px 16px; border-radius: var(--r-md); }
       input[type=text], input[type=password], select { flex: 1 1 100%; }
       .table-desktop { display: none; }
@@ -764,9 +775,9 @@
     <header class="site-header">
       <div class="site-logo" aria-hidden="true">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-          <ellipse cx="16" cy="16" rx="10" ry="5" stroke="#30d158" stroke-width="1.5" transform="rotate(-25 16 16)"/>
-          <ellipse cx="16" cy="16" rx="7" ry="3.5" stroke="#0a84ff" stroke-width="1.5" transform="rotate(-25 16 16)"/>
-          <circle cx="16" cy="16" r="2.5" fill="#0a84ff"/>
+          <ellipse cx="16" cy="16" rx="10" ry="5" stroke="currentColor" stroke-width="1.5" transform="rotate(-25 16 16)"/>
+          <ellipse cx="16" cy="16" rx="7" ry="3.5" stroke="currentColor" stroke-width="1.5" transform="rotate(-25 16 16)"/>
+          <circle cx="16" cy="16" r="2.5" fill="currentColor"/>
         </svg>
       </div>
       <div class="site-header-text">
@@ -779,11 +790,11 @@
       <ol class="stepper-list" id="stepper">
         <li class="stepper-item active" data-step="1">
           <span class="stepper-dot">۱</span>
-          <span class="stepper-label">اتصال</span>
+          <span class="stepper-label" id="step1Label">واکشی</span>
         </li>
         <li class="stepper-item" data-step="2">
           <span class="stepper-dot">۲</span>
-          <span class="stepper-label">انتخاب و واکشی</span>
+          <span class="stepper-label">انتخاب و مقایسه</span>
         </li>
         <li class="stepper-item" data-step="3">
           <span class="stepper-dot">۳</span>
@@ -796,20 +807,28 @@
       </ol>
     </nav>
 
-    <div class="card" data-step-card="1">
-      <p class="step-title">اتصال به رسیور</p>
-      <p class="hint hint-flush">همین IP و رمز برای «واکشی زنده» و «انتقال خودکار» استفاده می‌شود. اگر واکشی زنده نزنید، فهرست ماهواره‌ها از <b>نسخه‌ی داخلی</b> می‌آید (نه لزوماً همان TP List فعلی دستگاه).</p>
-      <div class="row row-spaced">
+    <div class="card fetch-panel" data-step-card="1">
+      <p class="step-title" id="fetchStepTitle">واکشی اطلاعات از رسیور</p>
+      <p class="hint hint-flush" id="fetchHint">
+        فهرست ماهواره‌ها و TP را از پایگاه زندهٔ رسیور بخوانید.
+        اگر واکشی نکنید، از <b>نسخهٔ داخلی</b> استفاده می‌شود.
+      </p>
+
+      <div class="row row-spaced standalone-creds" id="standaloneCreds">
         <input type="text" class="ltr flex-host" id="rxHost" placeholder="IP رسیور، مثال: 192.168.100.102" value="192.168.100.102" aria-label="IP رسیور">
         <input type="text" class="ltr flex-narrow" id="rxUser" placeholder="کاربر" value="root" aria-label="نام کاربری">
         <input type="password" class="ltr flex-narrow" id="rxPass" placeholder="رمز" value="root" aria-label="رمز عبور">
-        <button class="ghost" id="loadBtn" type="button">
+      </div>
+
+      <div class="fetch-actions">
+        <button class="secondary" id="loadBtn" type="button">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/>
           </svg>
-          واکشی زنده از رسیور
+          واکشی اطلاعات
         </button>
         <span class="pill" id="srcPill">منبع داده: داخلی</span>
+        <a class="console-conn-link" id="sharedConnLink" href="/" hidden>تغییر اتصال در کنسول</a>
       </div>
       <div class="status" id="loadStatus" role="status" aria-live="polite"></div>
     </div>
@@ -886,7 +905,14 @@
         <p class="hint hint-flush">
           فایل روی پایگاه‌داده‌ی <b>کاری</b>
           <span class="mono">/data/gx/local/enigma_db/satellites.xml</span>
-          نوشته می‌شود (با پشتیبان)، سپس رسیور <b>ری‌استارت</b> می‌شود تا TP List به‌روز شود.
+          نوشته می‌شود (با پشتیبان)، سپس WebIF لیست را بازخوانی می‌کند تا در
+          <span class="mono">live_prog</span> ثبت شود (بدون ری‌استارت اجباری).
+        </p>
+        <p class="hint hint-flush" id="motorProtectHint">
+          Motor/USALS: بازخوانی Motor را پاک می‌کند؛ انتقال قبل از reload از
+          <span class="mono">live_prog</span> پشتیبان می‌گیرد و بعد از reload
+          (ترجیحاً از پروفایل ذخیرهٔ کانال‌ها، وگرنه از همان پشتیبان) برمی‌گرداند —
+          بدون بازخوانی دوباره.
         </p>
         <div class="row row-action">
           <button class="secondary" id="sendBtn" type="button">
@@ -921,6 +947,37 @@
       return base ? base + path : path;
     };
     const apiFetch = (path, opts) => fetch(withMount(path), opts);
+
+    function applySharedConnection() {
+      const c = window.SPIDERVIP_CONNECTION;
+      const inConsole = !!(window.SPIDERVIP_MOUNT || c);
+      const link = $("sharedConnLink");
+      if (inConsole) {
+        document.body.classList.add("console-embedded");
+        if (link) link.hidden = false;
+        if ($("fetchHint")) {
+          $("fetchHint").innerHTML =
+            "اتصال از <b>صفحهٔ اصلی کنسول</b> تنظیم شده است. اینجا فقط فهرست زندهٔ ماهواره‌ها و TP را از رسیور می‌خوانید " +
+            "(اول FTP، اگر پورت ۲۱ بسته باشد از Telnet).";
+        }
+        if ($("fetchStepTitle")) $("fetchStepTitle").textContent = "واکشی اطلاعات از رسیور";
+        if ($("step1Label")) $("step1Label").textContent = "واکشی";
+        // Seed hidden inputs for any fallback paths; visible creds stay hidden in CSS.
+        if (c) {
+          if (c.host != null && $("rxHost")) $("rxHost").value = c.host;
+          if (c.user != null && $("rxUser")) $("rxUser").value = c.user;
+          if (c.password != null && $("rxPass")) $("rxPass").value = c.password;
+        }
+        return;
+      }
+      if (link) link.hidden = true;
+      if ($("step1Label")) $("step1Label").textContent = "اتصال و واکشی";
+      if ($("fetchHint")) {
+        $("fetchHint").innerHTML =
+          "IP و رمز را وارد کنید، سپس فهرست زنده را واکشی کنید. اگر واکشی نکنید، از <b>نسخهٔ داخلی</b> استفاده می‌شود.";
+      }
+    }
+    applySharedConnection();
     const faNum = (n) => n.toLocaleString("fa-IR");
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -935,16 +992,20 @@
       const el = $("deployCreds");
       if (!el) return;
       const { host, user } = rxCreds();
+      const fromConsole = document.body.classList.contains("console-embedded");
       if (!host) {
-        el.innerHTML = "IP رسیور در کارت «اتصال» خالی است — قبل از انتقال آن را پر کنید.";
+        el.innerHTML = fromConsole
+          ? "اتصال رسیور در کنسول تنظیم نشده — به صفحهٔ اصلی برگردید و اتصال را ذخیره کنید."
+          : "IP رسیور خالی است — قبل از انتقال آن را پر کنید.";
         el.classList.add("err");
         return;
       }
       el.classList.remove("err");
-      el.innerHTML =
-        `اعتبار فعلی: <span class="mono">${host}</span>` +
-        ` · کاربر <span class="mono">${user || "—"}</span>` +
-        ` (رمز از همان کارت اتصال خوانده می‌شود).`;
+      el.innerHTML = fromConsole
+        ? `انتقال با اتصال مشترک کنسول: <span class="mono">${host}</span> · کاربر <span class="mono">${user || "—"}</span>.`
+        : `اعتبار فعلی: <span class="mono">${host}</span>` +
+          ` · کاربر <span class="mono">${user || "—"}</span>` +
+          ` (رمز از فرم واکشی خوانده می‌شود).`;
     }
 
     function showDonePanel() {
@@ -961,7 +1022,19 @@
     }
 
     function rxCreds() {
-      return { host: $("rxHost").value.trim(), user: $("rxUser").value.trim(), password: $("rxPass").value };
+      const c = window.SPIDERVIP_CONNECTION;
+      if (document.body.classList.contains("console-embedded") && c) {
+        return {
+          host: String(c.host || "").trim(),
+          user: String(c.user || "").trim(),
+          password: c.password != null ? String(c.password) : "",
+        };
+      }
+      return {
+        host: $("rxHost") ? $("rxHost").value.trim() : "",
+        user: $("rxUser") ? $("rxUser").value.trim() : "",
+        password: $("rxPass") ? $("rxPass").value : "",
+      };
     }
 
     function revealSatSelect() {
@@ -984,7 +1057,13 @@
 
     async function loadSats() {
       try {
-        const r = await apiFetch("/satellites");
+        const creds = rxCreds();
+        const qs = new URLSearchParams();
+        if (creds.host) qs.set("host", creds.host);
+        if (creds.user) qs.set("user", creds.user);
+        if (creds.password) qs.set("password", creds.password);
+        const q = qs.toString();
+        const r = await apiFetch("/satellites" + (q ? ("?" + q) : ""));
         const d = await r.json();
         if (!d.ok) {
           $("sat").innerHTML = '<option value="">خطا در بارگذاری فهرست</option>';
@@ -1003,25 +1082,43 @@
     async function loadLive() {
       const ls = $("loadStatus");
       ls.className = "status";
-      if (!$("rxHost").value.trim()) { ls.className = "status err"; ls.textContent = "IP رسیور را وارد کنید."; return; }
+      const fromConsole = document.body.classList.contains("console-embedded");
+      const creds = rxCreds();
+      if (!creds.host) {
+        ls.className = "status err";
+        ls.textContent = fromConsole
+          ? "اتصال کنسول IP ندارد — اول در صفحهٔ اصلی کنسول ذخیره کنید."
+          : "IP رسیور را وارد کنید.";
+        return;
+      }
       $("loadBtn").disabled = true;
-      ls.innerHTML = '<span class="spinner"></span> در حال واکشی زنده از رسیور…';
+      ls.innerHTML = '<span class="spinner"></span> در حال واکشی اطلاعات از رسیور…';
       try {
         const resp = await apiFetch("/load_receiver", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rxCreds()),
+          body: JSON.stringify(creds),
         });
+        const ctype = (resp.headers.get("content-type") || "").toLowerCase();
+        if (!ctype.includes("application/json")) {
+          const snippet = (await resp.text()).slice(0, 80);
+          throw new Error(
+            `پاسخ JSON نبود (ممکن است مسیر mount اشتباه باشد): ${snippet}`
+          );
+        }
         const d = await resp.json();
         if (!d.ok) { ls.className = "status err"; ls.textContent = (d.error || "خطا") + (d.hint ? " — " + d.hint : ""); return; }
         fillSatDropdown(d.satellites);
         $("srcPill").textContent = "منبع داده: رسیور (زنده)";
         $("srcPill").className = "pill live";
         ls.className = "status ok";
-        ls.textContent = `فهرست زنده از رسیور (${d.host}) خوانده شد: ${faNum(d.satellites.length)} ماهواره.`;
+        const via = d.transport === "telnet" ? " (Telnet)" : (d.transport === "ftp" ? " (FTP)" : "");
+        ls.textContent = fromConsole
+          ? `واکشی انجام شد${via}: ${faNum(d.satellites.length)} ماهواره.`
+          : `واکشی انجام شد از ${d.host}${via}: ${faNum(d.satellites.length)} ماهواره.`;
         setStepper(2);
         refreshDeployCreds();
       } catch (e) {
-        ls.className = "status err"; ls.textContent = "خطا در ارتباط با سرور: " + e;
+        ls.className = "status err"; ls.textContent = "خطا در واکشی اطلاعات: " + e;
       } finally {
         $("loadBtn").disabled = false;
       }
@@ -1207,15 +1304,17 @@
       $("applyBtn").disabled = true;
       es.innerHTML = '<span class="spinner"></span> در حال اعمال تغییرات…';
       try {
+        const creds = rxCreds();
         const resp = await apiFetch("/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sat_index: curSatIndex, add, remove }),
+          body: JSON.stringify({ sat_index: curSatIndex, add, remove, ...creds }),
         });
         const d = await resp.json();
         if (!d.ok) { es.className = "status err"; es.textContent = d.error || "خطا."; return; }
         es.className = "status ok";
         es.textContent = `${faNum(d.added)} افزوده و ${faNum(d.removed)} حذف شد — اکنون ${faNum(d.after)} فرکانس.`;
+        if (d.live_note) es.textContent += " — " + d.live_note;
         $("doneMsg").innerHTML =
           `تغییرات روی «${d.sat_name}» اعمال شد: ${faNum(d.added)} افزوده، ${faNum(d.removed)} حذف ` +
           `<span class="msg-nowrap">(مجموع ${faNum(d.after)}).</span>`;
@@ -1232,7 +1331,15 @@
     async function sendToReceiver() {
       const ss = $("sendStatus");
       ss.className = "status";
-      if (!$("rxHost").value.trim()) { ss.className = "status err"; ss.textContent = "IP رسیور را در بالای صفحه وارد کنید."; return; }
+      const creds = rxCreds();
+      const fromConsole = document.body.classList.contains("console-embedded");
+      if (!creds.host) {
+        ss.className = "status err";
+        ss.textContent = fromConsole
+          ? "اتصال کنسول IP ندارد — اول در صفحهٔ اصلی کنسول ذخیره کنید."
+          : "IP رسیور را در بالای صفحه وارد کنید.";
+        return;
+      }
       $("sendBtn").disabled = true;
       ss.innerHTML = '<span class="spinner"></span> در حال انتقال به رسیور…';
       $("sendLogBox").classList.add("hidden");
@@ -1241,7 +1348,7 @@
         const resp = await apiFetch("/send_to_receiver", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rxCreds()),
+          body: JSON.stringify(creds),
         });
         const d = await resp.json();
         if (!d.ok) {
@@ -1250,7 +1357,9 @@
           return;
         }
         ss.className = "status ok";
-        ss.textContent = `انتقال به ${d.host} انجام شد.`;
+        ss.textContent = fromConsole
+          ? "انتقال انجام شد."
+          : `انتقال به ${d.host} انجام شد.`;
         (d.steps || []).forEach(line => {
           const tr = document.createElement("tr");
           const td = document.createElement("td");

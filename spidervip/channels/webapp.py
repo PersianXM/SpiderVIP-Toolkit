@@ -126,6 +126,40 @@ class ChannelApp:
             ),
         }
 
+    def configure_receiver(
+        self,
+        host: str,
+        *,
+        username: str = "root",
+        password: str = "root",
+        simulate: bool = False,
+    ) -> Dict[str, Any]:
+        """Switch the live/sim backend using Console shared connection settings."""
+        with self._op_lock:
+            try:
+                close = getattr(self.receiver, "close", None)
+                if callable(close):
+                    close()
+            except Exception:
+                pass
+
+            if simulate or not (host or "").strip():
+                self.receiver = SimulatedChannelReceiver()
+                self.simulate = True
+                self.pipeline = SafeApplyPipeline(self.manager, self.receiver)
+                return self.connection_status()
+
+            from .live_receiver import LiveChannelReceiver
+
+            self.receiver = LiveChannelReceiver(
+                host.strip(),
+                username=username or "root",
+                password=password if password is not None else "root",
+            )
+            self.simulate = False
+            self.pipeline = SafeApplyPipeline(self.manager, self.receiver)
+            return self.connection_status()
+
 
 def make_handler(app: ChannelApp):
     class Handler(BaseHTTPRequestHandler):
@@ -347,6 +381,19 @@ def make_handler(app: ChannelApp):
                     result = app.pull_from_receiver()
                     return self._json(200, result)
 
+                if path == "/api/receiver/configure":
+                    status = app.configure_receiver(
+                        str(data.get("host") or ""),
+                        username=str(data.get("user") or data.get("username") or "root"),
+                        password=str(
+                            data.get("password")
+                            if data.get("password") is not None
+                            else "root"
+                        ),
+                        simulate=bool(data.get("simulate", False)),
+                    )
+                    return self._json(200, {"ok": True, "status": status})
+
                 if path == "/api/motor-profile":
                     from .motor_profile import MotorProfile
 
@@ -394,6 +441,8 @@ def serve(
     *,
     simulate: bool = True,
     receiver_host: Optional[str] = None,
+    receiver_user: str = "root",
+    receiver_password: str = "root",
     workspace: Optional[Path] = None,
     catalog_url: Optional[str] = None,
 ) -> Tuple[ThreadingHTTPServer, ChannelApp]:
@@ -405,7 +454,11 @@ def serve(
     else:
         from .live_receiver import LiveChannelReceiver
 
-        receiver = LiveChannelReceiver(receiver_host)
+        receiver = LiveChannelReceiver(
+            receiver_host,
+            username=receiver_user,
+            password=receiver_password,
+        )
 
     app = ChannelApp(manager, receiver, catalog_url=catalog_url, simulate=simulate)
     server = ThreadingHTTPServer((host, port), make_handler(app))

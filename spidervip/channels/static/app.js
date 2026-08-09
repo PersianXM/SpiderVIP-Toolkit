@@ -28,6 +28,24 @@
     toast._t = setTimeout(() => { el.hidden = true; }, 3200);
   };
 
+  async function applySharedConnection() {
+    const c = window.SPIDERVIP_CONNECTION;
+    if (!c || !c.host) return;
+    try {
+      await api("/api/receiver/configure", {
+        method: "POST",
+        body: JSON.stringify({
+          host: c.host,
+          user: c.user || "root",
+          password: c.password != null ? c.password : "root",
+          simulate: false,
+        }),
+      });
+    } catch (_) {
+      /* standalone dashboard without console connection is fine */
+    }
+  }
+
   async function api(path, opts = {}) {
     const res = await fetch(withMount(path), {
       headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
@@ -975,6 +993,9 @@
   });
 
   setupFavoriteDropZone();
-  refresh().catch((err) => toast(err.message));
+  (async () => {
+    await applySharedConnection();
+    await refresh().catch((err) => toast(err.message));
+  })();
   setInterval(updateConnectionStatus, 8000);
 })();

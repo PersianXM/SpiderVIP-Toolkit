@@ -281,6 +281,8 @@ def _cmd_console(args: argparse.Namespace) -> int:
         port=args.http_port,
         simulate=bool(args.simulate or not args.host),
         receiver_host=args.host,
+        receiver_user=getattr(args, "user", "root") or "root",
+        receiver_password=getattr(args, "password", "root") or "root",
         workspace=args.workspace,
         catalog_url=args.catalog,
     )
@@ -297,6 +299,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_console = sub.add_parser("console", help="open the unified SpiderVIP Console")
     p_console.add_argument("--simulate", action="store_true", help="use the channel simulator backend")
     p_console.add_argument("--host", help="receiver IP/hostname for live channel ops")
+    p_console.add_argument("--user", default="root", help="receiver username (default: root)")
+    p_console.add_argument("--password", default="root", help="receiver password (default: root)")
     p_console.add_argument("--bind", default="127.0.0.1", help="console bind address")
     p_console.add_argument("--http-port", type=int, default=8787, help="console HTTP port")
     p_console.add_argument("--workspace", help="channels workspace directory")

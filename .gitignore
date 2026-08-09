@@ -38,6 +38,9 @@ dist/
 # Local channel manager workspace (receiver snapshots, backups)
 .spidervip_channels/
 
+# Console shared connection (may include LAN credentials)
+.spidervip_console/
+
 # Frequency topic runtime / live dumps
 spidervip/frequency/output/
 spidervip/frequency/_live_tmp.xml

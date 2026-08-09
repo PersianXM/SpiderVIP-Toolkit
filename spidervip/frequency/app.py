@@ -61,6 +61,14 @@ def index():
     return render_template("index.html")
 
 
+def _creds_hint(host):
+    return (
+        f"IP هدف: {host or '—'} — رسیور باید روشن و در همان شبکه باشد؛ "
+        "در حالت کنسول ابتدا اتصال را در صفحهٔ اصلی ذخیره کنید. "
+        "اگر FTP بسته است ولی Telnet باز است، واکشی از Telnet انجام می‌شود."
+    )
+
+
 def _try_pull_live(host=None, user=None, password=None):
     """Best-effort: pull the live receiver DB and cache it in the session.
 
@@ -68,17 +76,19 @@ def _try_pull_live(host=None, user=None, password=None):
     flow (dropdown → comparison → apply → push) anchored to the SAME live data
     is what guarantees that removals actually match real carriers on the device.
     """
-    host = (host or deploy.DEFAULT_HOST)
-    user = (user or deploy.DEFAULT_USER)
+    host = (host or "").strip() or deploy.DEFAULT_HOST
+    user = (user or "").strip() or deploy.DEFAULT_USER
     password = deploy.DEFAULT_PASS if password in (None, "") else password
     try:
-        xml_bytes = deploy.ftp_download(host, user, password)
+        result = deploy.download_receiver_db(host, user, password)
+        xml_bytes = result["data"]
         live_path = os.path.join(OUTPUT_DIR, "live_receiver_data.xml")
         with open(live_path, "wb") as fh:
             fh.write(xml_bytes)
         # Validate it parses before trusting it.
         receiver.list_satellites(live_path)
         session["receiver_db_path"] = live_path
+        session["receiver_db_transport"] = result.get("transport", "")
         return live_path
     except Exception:  # noqa: BLE001
         return None
@@ -90,11 +100,15 @@ def satellites_route():
 
     Auto-pulls the live device DB on first load (best effort) so the dropdown
     counts and the later comparison match the receiver exactly.
+    Optional query: host, user, password (from Console shared connection).
     """
     try:
         cached = session.get("receiver_db_path", "")
         if not (cached and os.path.exists(cached)):
-            _try_pull_live()
+            host = (request.args.get("host") or "").strip() or None
+            user = (request.args.get("user") or "").strip() or None
+            password = request.args.get("password")
+            _try_pull_live(host=host, user=user, password=password)
         db = _db_path()
         source = "live" if session.get("receiver_db_path") and os.path.exists(
             session.get("receiver_db_path", "")) else "bundled"
@@ -102,6 +116,7 @@ def satellites_route():
             "ok": True,
             "satellites": receiver.list_satellites(db),
             "source": source,
+            "transport": session.get("receiver_db_transport") or None,
         })
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -110,7 +125,7 @@ def satellites_route():
 
 @app.route("/load_receiver", methods=["POST"])
 def load_receiver_route():
-    """Pull the live satellites.xml from the receiver via FTP and use it.
+    """Pull live satellites.xml from the receiver (FTP, else Telnet) and use it.
 
     Expected JSON: { "host": ..., "user": ..., "password": ... }
     """
@@ -122,13 +137,23 @@ def load_receiver_route():
     if password is None or password == "":
         password = deploy.DEFAULT_PASS
 
+    if not host:
+        return jsonify({
+            "ok": False,
+            "error": "IP رسیور خالی است.",
+            "hint": "در کنسول ابتدا اتصال را ذخیره کنید؛ در حالت مستقل IP را وارد کنید.",
+        }), 400
+
     try:
-        xml_bytes = deploy.ftp_download(host, user, password)
+        result = deploy.download_receiver_db(host, user, password)
+        xml_bytes = result["data"]
+        transport = result.get("transport", "ftp")
     except Exception as exc:  # noqa: BLE001
         return jsonify({
             "ok": False,
             "error": f"واکشی زنده از رسیور ناموفق بود: {exc}",
-            "hint": "بررسی کنید رسیور روشن و در همان شبکه باشد و IP/رمز درست باشد.",
+            "hint": _creds_hint(host),
+            "host": host,
         }), 502
 
     live_path = os.path.join(OUTPUT_DIR, "live_receiver_data.xml")
@@ -145,8 +170,14 @@ def load_receiver_route():
         }), 502
 
     session["receiver_db_path"] = live_path
-    return jsonify({"ok": True, "host": host, "source": "live",
-                    "satellites": sats})
+    session["receiver_db_transport"] = transport
+    return jsonify({
+        "ok": True,
+        "host": host,
+        "source": "live",
+        "transport": transport,
+        "satellites": sats,
+    })
 
 
 
@@ -261,13 +292,18 @@ def apply_route():
     base_path = _db_path()
     live_note = None
     try:
-        xml_bytes = deploy.ftp_download(host, user, password)
+        pulled = deploy.download_receiver_db(host, user, password)
+        xml_bytes = pulled["data"]
         live_path = os.path.join(OUTPUT_DIR, "live_receiver_data.xml")
         with open(live_path, "wb") as fh:
             fh.write(xml_bytes)
         session["receiver_db_path"] = live_path
+        session["receiver_db_transport"] = pulled.get("transport", "")
         base_path = live_path
-        live_note = "پایگاه‌داده‌ی زنده‌ی رسیور مبنای ویرایش قرار گرفت."
+        via = pulled.get("transport", "?")
+        live_note = (
+            f"پایگاه‌داده‌ی زنده‌ی رسیور مبنای ویرایش قرار گرفت (از طریق {via})."
+        )
     except Exception as exc:  # noqa: BLE001
         # Fall back to whatever we have, but tell the user it may not match.
         live_note = (f"هشدار: واکشی زنده‌ی رسیور ممکن نشد ({exc}); از نسخه‌ی "
@@ -299,20 +335,24 @@ def apply_route():
         "removed": result["removed"],
         "after": result["after"],
         "saved_as": out_name,
+        "live_note": live_note,
     })
 
 
 
 @app.route("/send_to_receiver", methods=["POST"])
 def send_to_receiver_route():
-    """Push the last generated database to the receiver over FTP + WebIF reload.
+    """Push the last generated database to the receiver (FTP or Telnet) + WebIF.
 
     Uploads the edited satellites.xml onto the live DB and calls the WebIF
     /web/servicelistreload so the change is committed into the box's binary
-    store (live_prog) — persistent, no reboot needed.
+    store (live_prog) — persistent, no reboot needed. After reload, Motor/USALS
+    is restored from channels ``motor_profile.json`` and/or a pre-reload
+    ``live_prog`` backup (same approach as Favorite Apply).
 
     Expected JSON (all optional except that an export must have run first):
-        { "host": "192.168.100.102", "user": "root", "password": "root" }
+        { "host": "192.168.100.102", "user": "root", "password": "root",
+          "workspace": optional channels workspace path }
     """
 
     data = request.get_json(silent=True) or {}
@@ -321,6 +361,7 @@ def send_to_receiver_route():
     password = data.get("password")
     if password is None or password == "":
         password = deploy.DEFAULT_PASS
+    workspace = (data.get("workspace") or "").strip() or None
 
     path = session.get("last_xml_path", "")
     if not path or not os.path.exists(path):
@@ -333,13 +374,19 @@ def send_to_receiver_route():
         xml_bytes = fh.read()
 
     try:
-        steps = deploy.send_to_receiver(xml_bytes, host=host, user=user,
-                                        password=password)
+        steps = deploy.send_to_receiver(
+            xml_bytes,
+            host=host,
+            user=user,
+            password=password,
+            workspace=workspace,
+        )
     except Exception as exc:  # noqa: BLE001
         return jsonify({
             "ok": False,
             "error": f"انتقال به رسیور ناموفق بود: {exc}",
-            "hint": "بررسی کنید رسیور روشن و در همان شبکه باشد و IP/رمز درست باشد.",
+            "hint": _creds_hint(host),
+            "host": host,
         }), 502
 
     return jsonify({"ok": True, "host": host, "steps": steps})

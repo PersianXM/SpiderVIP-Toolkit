@@ -4,17 +4,17 @@
 
 ## کد
 
-- `spidervip/console/` — پوسته + پروکسی فاز ۱
-- نام محصول UI: **SpiderVIP Console** / **کنسول SpiderVIP**
+- `spidervip/console/` — پوسته + پروکسی + اتصال مشترک (فاز ۲)
 - اجرا: `python -m spidervip.cli console` → `http://127.0.0.1:8787/`
 
 ## فضاهای کاری
 
 | مسیر UI | موضوع |
 |---|---|
-| `/frequencies/` | مدیریت فرکانس (`spidervip/frequency`) |
-| `/channels/` | کانال و Favorite (`spidervip/channels`) |
+| `/` | پوسته + پنل اتصال مشترک |
+| `/frequencies/` | مدیریت فرکانس |
+| `/channels/` | کانال و Favorite |
 
-فاز ۱ فقط پوسته و mount است. اتصال مشترک IP/وضعیت رسیور در فاز ۲ می‌آید.
+API اتصال: `GET/POST /api/connection` ، `POST /api/connection/probe`
 
 نقشهٔ موضوعات: [`../TOPICS.md`](../TOPICS.md).
