@@ -1,11 +1,10 @@
 ---
-description: Persistent visual and UI implementation rules for the operational dashboard. Apply whenever creating, modifying, reviewing, or refactoring dashboard UI.
+description: Persistent visual and UI implementation rules for SpiderVIP Console, Frequency, and Channels dashboards. Apply when creating, modifying, reviewing, or refactoring UI.
 globs:
-  - "spidervip/console/**/*.{html,css,js,svg}"
-  - "spidervip/channels/static/**/*.{html,css,js}"
-  - "spidervip/frequency/templates/**/*.{html,css,js}"
-  - "spidervip/frequency/static/**/*.{html,css,js}"
-alwaysApply: true
+  - "spidervip/console/**/*"
+  - "spidervip/frequency/**/*"
+  - "spidervip/channels/static/**/*"
+alwaysApply: false
 ---
 
 # Dashboard Design System — Cursor Rule
@@ -16,7 +15,8 @@ The visual system is defined by these source-of-truth documents:
 
 - `docs/design/DESIGN_SYSTEM.md`
 - `docs/design/UI_ART_DIRECTION.md`
-- `docs/design/CURSOR_IMPLEMENTATION_PROMPT.md`
+- `docs/design/DESIGN.md` (SpiderVIP Console product notes)
+- Live tokens: `spidervip/console/static/theme.css`
 
 Read and follow them before making substantial UI changes.
 
@@ -70,7 +70,7 @@ Do not introduce a new UI library or styling framework unless there is a clear p
 
 Prefer design tokens/CSS variables/theme values over arbitrary hardcoded visual values.
 
-Use the values defined in `docs/design/DESIGN_SYSTEM.md`.
+Use the values defined in `docs/design/DESIGN_SYSTEM.md` and the live source `spidervip/console/static/theme.css`.
 
 Core palette:
 

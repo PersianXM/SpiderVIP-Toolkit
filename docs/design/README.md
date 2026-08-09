@@ -1,25 +1,18 @@
-# SpiderVIP Console — Design system
+# Design documentation
 
-Imported design source-of-truth for redesigning the Digigo-style Console / Frequency / Channels UI.
+Visual language and UI guidance for SpiderVIP Console, Frequency Manager, and Channel & Favorite Manager.
 
-**Live CSS tokens today:** `spidervip/console/static/theme.css`  
-**Cursor rule:** [`.cursor/rules/dashboard-design.mdc`](../../.cursor/rules/dashboard-design.mdc)
+**Live token source:** [`spidervip/console/static/theme.css`](../../spidervip/console/static/theme.css) (served as `/static/console/theme.css`). Prefer this file over prose when hex values or CSS variables disagree.
 
 ## Documents
 
-| File | Role |
+| Doc | Purpose |
 |---|---|
-| [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Palette, type, spacing, components, tokens |
-| [`UI_ART_DIRECTION.md`](UI_ART_DIRECTION.md) | Art direction, composition, motion, anti-patterns |
-| [`CURSOR_IMPLEMENTATION_PROMPT.md`](CURSOR_IMPLEMENTATION_PROMPT.md) | Implementation prompt for agents / redesign sessions |
-| [`DESIGN.md`](DESIGN.md) | Current Digigo Console token snapshot (pre-redesign reference) |
+| [`DESIGN.md`](DESIGN.md) | SpiderVIP Console design notes (Digigo / neo-brutalist operate UI, product-specific tokens & layout) |
+| [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Operational dashboard design system (tokens, components, decoration, motion) |
+| [`UI_ART_DIRECTION.md`](UI_ART_DIRECTION.md) | Art direction — composition, density, rhythm, QA checklist |
+| [`CURSOR_IMPLEMENTATION_PROMPT.md`](CURSOR_IMPLEMENTATION_PROMPT.md) | Prompt for Cursor when implementing or refactoring dashboard UI |
 
-## Source import
+## Cursor rules
 
-Copied from local `G:\design` into this folder (`.md`) and `.cursor/rules/` (`.mdc`). After verifying these paths in git, the original `G:\design` folder may be deleted.
-
-## Redesign guardrails
-
-- Keep existing element IDs, API routes, and backend contracts unless the task explicitly changes them.
-- Prefer updating `theme.css` + static HTML/CSS/JS under `spidervip/console`, `spidervip/channels/static`, and `spidervip/frequency/templates`.
-- Recoverable Digigo UI backup: branch `backup/ui-before-design-docs-redesign`, tag `ui-digigo-backup-20260809`.
+Agent UI rules: [`.cursor/rules/spidervip-ui.mdc`](../../.cursor/rules/spidervip-ui.mdc) (scoped to console / frequency / channels static UI paths).

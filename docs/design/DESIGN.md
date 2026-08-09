@@ -87,6 +87,8 @@ components:
 
 # Design System — SpiderVIP Console
 
+> Canonical location: `docs/design/`. Index: [`README.md`](README.md). Broader visual system: [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) · [`UI_ART_DIRECTION.md`](UI_ART_DIRECTION.md).
+
 ## Overview
 
 Operate-mode UI for a satellite receiver toolkit, dressed in Digigo-like neo-brutalism: clean off-white page, large rounded cards, thick solid black outlines, high-contrast lime / orange / sky accents, dark notched header. Playful geometry without toyish chrome — denser controls, real task copy, no fake marketplace stats.

@@ -16,10 +16,12 @@ requested.
 Your job is to apply the visual design system and art direction defined
 in:
 
--   `DESIGN_SYSTEM.md`
--   `UI_ART_DIRECTION.md`
+-   `docs/design/DESIGN_SYSTEM.md`
+-   `docs/design/UI_ART_DIRECTION.md`
+-   `docs/design/DESIGN.md` (SpiderVIP Console product notes)
+-   Live tokens: `spidervip/console/static/theme.css`
 
-These two files are the visual source of truth.
+These documents are the visual source of truth; prefer `theme.css` when token values disagree.
 
 ------------------------------------------------------------------------
 
