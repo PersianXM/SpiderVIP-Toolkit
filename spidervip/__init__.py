@@ -1,8 +1,10 @@
-"""SpiderVIP firmware patch toolkit.
+"""SpiderVIP multi-topic toolkit for satellite receivers.
 
-Diagnose and remotely repair the "no picture / no sound" (audio-video freeze)
-condition on SpiderVIP-class satellite receivers whose control, zapping, power
-and settings menu still work.
+Topics live as packages under this tree (see docs/TOPICS.md):
+
+- A/V freeze diagnose/repair modules in this package root
+- ``spidervip.channels`` — channel & favorite manager
+- ``spidervip/frequency`` — LyngSat frequency/TP sync web app
 """
 
 from .model import AVStatus, Finding, PipelineState, Priority, RepairReport, RepairStep

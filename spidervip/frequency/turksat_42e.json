@@ -1,0 +1,1336 @@
+{
+  "name": "42.0E Ku-band Türksat 3A/4A",
+  "position": "42.0E",
+  "count": 166,
+  "source": "/usr/local/default/default_data.xml (Spider VIP firmware)",
+  "transponders": [
+    {
+      "freq": 10954,
+      "pol": "H",
+      "sr": 2500,
+      "fec": "3/5",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10962,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 10964,
+      "pol": "V",
+      "sr": 14170,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10967,
+      "pol": "H",
+      "sr": 4400,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 10974,
+      "pol": "H",
+      "sr": 2680,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10978,
+      "pol": "H",
+      "sr": 2680,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10980,
+      "pol": "V",
+      "sr": 12500,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10981,
+      "pol": "H",
+      "sr": 1666,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 10986,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 10997,
+      "pol": "H",
+      "sr": 2660,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11002,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11006,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11012,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11012,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11017,
+      "pol": "H",
+      "sr": 5920,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11021,
+      "pol": "H",
+      "sr": 2220,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11024,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11027,
+      "pol": "H",
+      "sr": 2960,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11031,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11040,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11045,
+      "pol": "H",
+      "sr": 4800,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11053,
+      "pol": "H",
+      "sr": 8000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11054,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11062,
+      "pol": "H",
+      "sr": 4820,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11067,
+      "pol": "H",
+      "sr": 2960,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11071,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11096,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11096,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11126,
+      "pol": "H",
+      "sr": 2680,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11128,
+      "pol": "V",
+      "sr": 3032,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11131,
+      "pol": "H",
+      "sr": 2455,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11131,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11135,
+      "pol": "V",
+      "sr": 2300,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11137,
+      "pol": "H",
+      "sr": 2960,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11142,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11148,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11155,
+      "pol": "H",
+      "sr": 4444,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11156,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11161,
+      "pol": "H",
+      "sr": 3180,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11176,
+      "pol": "V",
+      "sr": 34285,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "32APSK"
+    },
+    {
+      "freq": 11180,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11196,
+      "pol": "V",
+      "sr": 3033,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11458,
+      "pol": "V",
+      "sr": 3200,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11460,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11462,
+      "pol": "V",
+      "sr": 3200,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11466,
+      "pol": "V",
+      "sr": 3200,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11470,
+      "pol": "V",
+      "sr": 3200,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11478,
+      "pol": "V",
+      "sr": 6800,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11487,
+      "pol": "V",
+      "sr": 6800,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11496,
+      "pol": "V",
+      "sr": 5000,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11504,
+      "pol": "V",
+      "sr": 5000,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11509,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11514,
+      "pol": "V",
+      "sr": 2500,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11518,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "Auto",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11521,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "Auto",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11526,
+      "pol": "V",
+      "sr": 3333,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11540,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11545,
+      "pol": "H",
+      "sr": 4425,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11549,
+      "pol": "H",
+      "sr": 4444,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11557,
+      "pol": "H",
+      "sr": 395,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11557,
+      "pol": "H",
+      "sr": 405,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11558,
+      "pol": "H",
+      "sr": 390,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11558,
+      "pol": "H",
+      "sr": 410,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11558,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11559,
+      "pol": "H",
+      "sr": 400,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11562,
+      "pol": "H",
+      "sr": 3200,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11566,
+      "pol": "H",
+      "sr": 3200,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11570,
+      "pol": "H",
+      "sr": 2795,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11573,
+      "pol": "H",
+      "sr": 1800,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11574,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11577,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11585,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11594,
+      "pol": "V",
+      "sr": 25000,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11608,
+      "pol": "H",
+      "sr": 3702,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11609,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11621,
+      "pol": "V",
+      "sr": 2961,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11622,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11626,
+      "pol": "H",
+      "sr": 2200,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11626,
+      "pol": "V",
+      "sr": 2962,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11630,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11633,
+      "pol": "V",
+      "sr": 3333,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11634,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11637,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11639,
+      "pol": "H",
+      "sr": 2962,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11647,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "Auto",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11650,
+      "pol": "V",
+      "sr": 13600,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11651,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11660,
+      "pol": "H",
+      "sr": 7500,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11667,
+      "pol": "H",
+      "sr": 2960,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11675,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "Auto",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11676,
+      "pol": "V",
+      "sr": 24444,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11683,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11686,
+      "pol": "H",
+      "sr": 2962,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11691,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11691,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11789,
+      "pol": "H",
+      "sr": 20000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11853,
+      "pol": "H",
+      "sr": 25000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11855,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11880,
+      "pol": "H",
+      "sr": 20000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 11883,
+      "pol": "V",
+      "sr": 4800,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11916,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11958,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11977,
+      "pol": "H",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 11999,
+      "pol": "V",
+      "sr": 11666,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12009,
+      "pol": "V",
+      "sr": 4444,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12015,
+      "pol": "H",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12034,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12054,
+      "pol": "H",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12058,
+      "pol": "V",
+      "sr": 3250,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12073,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12083,
+      "pol": "H",
+      "sr": 13750,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12085,
+      "pol": "V",
+      "sr": 4444,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12095,
+      "pol": "H",
+      "sr": 4800,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12103,
+      "pol": "H",
+      "sr": 8333,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12188,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12209,
+      "pol": "H",
+      "sr": 10000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12213,
+      "pol": "V",
+      "sr": 5833,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12219,
+      "pol": "H",
+      "sr": 6500,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12228,
+      "pol": "V",
+      "sr": 8400,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12236,
+      "pol": "V",
+      "sr": 4000,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12245,
+      "pol": "H",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12265,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12298,
+      "pol": "V",
+      "sr": 4800,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12310,
+      "pol": "V",
+      "sr": 15000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12329,
+      "pol": "H",
+      "sr": 6666,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12336,
+      "pol": "H",
+      "sr": 5520,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12344,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12346,
+      "pol": "H",
+      "sr": 9600,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12356,
+      "pol": "H",
+      "sr": 7100,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12379,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12380,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12422,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12422,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12442,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12446,
+      "pol": "H",
+      "sr": 2400,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12458,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12461,
+      "pol": "H",
+      "sr": 20800,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12506,
+      "pol": "V",
+      "sr": 2660,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12517,
+      "pol": "V",
+      "sr": 5925,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12531,
+      "pol": "H",
+      "sr": 15000,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12542,
+      "pol": "H",
+      "sr": 3703,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12559,
+      "pol": "H",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12559,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12565,
+      "pol": "H",
+      "sr": 3333,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12572,
+      "pol": "H",
+      "sr": 2060,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12576,
+      "pol": "H",
+      "sr": 2080,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12578,
+      "pol": "H",
+      "sr": 2070,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12578,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12588,
+      "pol": "H",
+      "sr": 3200,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12588,
+      "pol": "V",
+      "sr": 22500,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12595,
+      "pol": "H",
+      "sr": 2955,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12605,
+      "pol": "V",
+      "sr": 27500,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12610,
+      "pol": "H",
+      "sr": 20830,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12620,
+      "pol": "V",
+      "sr": 2244,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12624,
+      "pol": "V",
+      "sr": 2170,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12627,
+      "pol": "V",
+      "sr": 2278,
+      "fec": "7/8",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12633,
+      "pol": "V",
+      "sr": 6666,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12641,
+      "pol": "H",
+      "sr": 30000,
+      "fec": "2/3",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12649,
+      "pol": "V",
+      "sr": 2962,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12653,
+      "pol": "V",
+      "sr": 3333,
+      "fec": "5/6",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12658,
+      "pol": "V",
+      "sr": 2222,
+      "fec": "3/4",
+      "system": "DVB-S",
+      "mod": "QPSK"
+    },
+    {
+      "freq": 12685,
+      "pol": "H",
+      "sr": 27500,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12685,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12715,
+      "pol": "V",
+      "sr": 4444,
+      "fec": "5/6",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12723,
+      "pol": "V",
+      "sr": 6000,
+      "fec": "3/4",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    },
+    {
+      "freq": 12729,
+      "pol": "V",
+      "sr": 30000,
+      "fec": "2/3",
+      "system": "DVB-S2",
+      "mod": "8PSK"
+    }
+  ]
+}

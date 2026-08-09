@@ -38,6 +38,13 @@ dist/
 # Local channel manager workspace (receiver snapshots, backups)
 .spidervip_channels/
 
+# Frequency topic runtime / live dumps
+spidervip/frequency/output/
+spidervip/frequency/_live_tmp.xml
+spidervip/frequency/_diag.py
+spidervip/frequency/_test
+spidervip/frequency/_test_commit.py
+
 # Local environments and editor state
 .env
 .env.*

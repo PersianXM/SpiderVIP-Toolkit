@@ -1,0 +1,11 @@
+# Topic-local ignores (root .gitignore also covers these)
+output/
+_live_tmp.xml
+_diag.py
+_test
+_test_commit.py
+__pycache__/
+.venv/
+venv/
+.env
+.env.*
