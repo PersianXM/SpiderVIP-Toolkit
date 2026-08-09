@@ -17,7 +17,7 @@
 | مدیریت فرکانس (Frequency Manager) | `spidervip/frequency/` | [`docs/frequency/README.md`](docs/frequency/README.md) |
 | کنسول واحد (SpiderVIP Console) | `spidervip/console/` | [`docs/console/README.md`](docs/console/README.md) |
 
-نقشهٔ کامل و قوانین کار: [`docs/TOPICS.md`](docs/TOPICS.md) · نمای کلی فنی: [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) · پوشه‌های آرشیو هم‌جوار: [`docs/ARCHIVE_SIBLINGS.md`](docs/ARCHIVE_SIBLINGS.md)
+نقشهٔ کامل و قوانین کار: [`docs/TOPICS.md`](docs/TOPICS.md) · نمای کلی فنی: [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) · طراحی UI: [`docs/design/`](docs/design/README.md) · پوشه‌های آرشیو هم‌جوار: [`docs/ARCHIVE_SIBLINGS.md`](docs/ARCHIVE_SIBLINGS.md)
 
 ```text
 docs/ + tools/     دانش و ابزار مشترک
@@ -97,6 +97,7 @@ python tools/freeze_pull.py
 |---|---|
 | [`docs/TOPICS.md`](docs/TOPICS.md) | نقشهٔ موضوعات محصول |
 | [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) | نمای کلی فنی و شواهد |
+| [`docs/design/README.md`](docs/design/README.md) | سیستم طراحی / UI (توکن زنده: `theme.css`) |
 | [`docs/console/README.md`](docs/console/README.md) | کنسول واحد |
 | [`docs/channels/README.md`](docs/channels/README.md) | کانال و Favorite |
 | [`docs/frequency/README.md`](docs/frequency/README.md) | مدیریت فرکانس |

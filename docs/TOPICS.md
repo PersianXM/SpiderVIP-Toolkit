@@ -33,3 +33,8 @@ docs/ + tools/          دانش و ابزار مشترک
 ```
 
 `channels` و `frequency` هر دو به پایگاه سرویس/فرکانس دستگاه وصل‌اند؛ تغییرات یکی می‌تواند روی دیگری اثر بگذارد. قبل از deploy زنده، backup و مسیر فایل زنده را از مستندات مشترک چک کنید.
+
+## Design / UI
+
+مستندات زبان بصری و سیستم طراحی کنسول و داشبوردها: [`docs/design/`](design/README.md)  
+توکن‌های زنده CSS: `spidervip/console/static/theme.css`

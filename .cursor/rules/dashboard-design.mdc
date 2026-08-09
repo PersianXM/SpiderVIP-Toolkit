@@ -1,0 +1,449 @@
+---
+description: Persistent visual and UI implementation rules for the operational dashboard. Apply whenever creating, modifying, reviewing, or refactoring dashboard UI.
+globs:
+  - "spidervip/console/**/*.{html,css,js,svg}"
+  - "spidervip/channels/static/**/*.{html,css,js}"
+  - "spidervip/frequency/templates/**/*.{html,css,js}"
+  - "spidervip/frequency/static/**/*.{html,css,js}"
+alwaysApply: true
+---
+
+# Dashboard Design System — Cursor Rule
+
+This project is a production operational dashboard.
+
+The visual system is defined by these source-of-truth documents:
+
+- `docs/design/DESIGN_SYSTEM.md`
+- `docs/design/UI_ART_DIRECTION.md`
+- `docs/design/CURSOR_IMPLEMENTATION_PROMPT.md`
+
+Read and follow them before making substantial UI changes.
+
+## 1. Primary objective
+
+Build a functional operational interface with a distinctive visual identity inspired by:
+
+- Modern Neo-Brutalism
+- Neo-Memphis
+- Geometric editorial design
+- Bold typography
+- Cream/off-white surfaces
+- Deep navy structural elements
+- Lime, orange, and blue accents
+- Modular asymmetric composition
+- Controlled geometric decoration
+- Subtle ambient motion
+
+Do NOT copy the reference image's exact layout or content.
+
+## 2. Functional priority
+
+Always preserve this hierarchy:
+
+1. Operational information
+2. User actions
+3. Navigation
+4. Status and alerts
+5. Data visualization
+6. Decorative visual language
+
+Never allow decoration or animation to reduce usability.
+
+Do not modify business logic, APIs, authentication, routing, state management, or existing functionality unless the task explicitly requires it.
+
+## 3. Inspect before implementing
+
+Before creating or modifying UI:
+
+- Inspect the existing project structure.
+- Identify the frontend framework and styling approach.
+- Search for existing reusable components.
+- Search for existing design tokens/theme variables.
+- Reuse existing layout primitives.
+- Avoid duplicate components.
+- Follow established project naming, file, TypeScript, linting, formatting, and testing conventions.
+
+Do not introduce a new UI library or styling framework unless there is a clear project-level reason.
+
+## 4. Design tokens are mandatory
+
+Prefer design tokens/CSS variables/theme values over arbitrary hardcoded visual values.
+
+Use the values defined in `docs/design/DESIGN_SYSTEM.md`.
+
+Core palette:
+
+- Background: `#F7F5EE`
+- Surface: `#FFFEF9`
+- Ink: `#111426`
+- Lime: `#C5F238`
+- Orange: `#FF6418`
+- Blue: `#58A8F5`
+- Yellow: `#F7C84B`
+
+Do not invent unrelated colors without a design-system reason.
+
+## 5. Component reuse
+
+Prefer reusable variants instead of one-off styling.
+
+Reuse or create consistent components for:
+
+- AppShell
+- Sidebar
+- TopBar
+- PageHeader
+- Card
+- KPI
+- ChartCard
+- TableCard
+- ActivityFeed
+- StatusCard
+- AlertCard
+- ActionCard
+- Button
+- Badge
+- Tabs
+- Search
+- Filter
+- Pagination
+- EmptyState
+- GeometricDecoration
+
+Before creating a new component, search the codebase for an equivalent component.
+
+## 6. Geometric decoration system
+
+Decorative geometry is a reusable system, not manually scattered markup.
+
+Supported primitives may include:
+
+- square
+- rectangle
+- circle
+- half-circle
+- capsule
+- arc
+- outline-square
+- outline-circle
+- line
+- dots
+- grid
+- cube
+- extruded-cube
+- geometric-fragment
+
+A decoration should be configurable by:
+
+- type
+- size
+- color
+- rotation
+- position
+- opacity
+- z-index
+- animation
+- delay
+
+Do not hardcode decorative SVG/HTML fragments independently inside many pages.
+
+## 7. Controlled randomization
+
+Decorations should feel organic but remain deterministic.
+
+DO NOT use uncontrolled `Math.random()` during React/render execution or equivalent rendering paths.
+
+Prefer a stable seeded or deterministic selection based on component identity, predefined variants, or another stable mechanism.
+
+The same component should not visibly reshuffle decorations on every render.
+
+Decoration selection should consider:
+
+- component type
+- component importance
+- available whitespace
+- surrounding background
+- nearby decoration patterns
+- responsive breakpoint
+
+Approximate distribution:
+
+- 35% of cards: no decoration
+- 40%: one decoration
+- 20%: two decorations
+- 5%: three-to-five decorations in large featured areas
+
+Dense tables, forms, and operational data regions should usually have no decoration or only an extremely subtle accent.
+
+## 8. Decoration placement
+
+Safe locations include:
+
+- top-left
+- top-right
+- bottom-left
+- bottom-right
+- card edges
+- unused whitespace
+- between sections
+- near, but not over, visual content
+
+Decorations may slightly cross card boundaries when compositionally appropriate.
+
+Never overlap:
+
+- important text
+- KPI values
+- buttons
+- inputs
+- tables
+- chart labels
+- navigation
+- alerts
+- interactive targets
+
+Use z-index and overflow intentionally.
+
+## 9. Visual variation
+
+Do not repeat the same decorative pattern in adjacent cards.
+
+Avoid sequences such as:
+
+- same cube
+- same position
+- same color
+- same rotation
+
+Instead vary:
+
+- geometry
+- size
+- color
+- position
+- rotation
+- animation
+- density
+
+Variation must remain within the design system.
+
+## 10. Animation
+
+Decorative animation is ambient and subtle.
+
+Allowed variants:
+
+- float
+- drift
+- rotate
+- pulse
+- orbit
+- micro-shift
+
+Typical duration:
+
+- 4–12 seconds
+
+Use different delays and durations so objects do not move synchronously.
+
+Avoid:
+
+- bouncing
+- flashing
+- fast movement
+- large scale changes
+- aggressive parallax
+- attention-seeking motion
+
+Interactive UI transitions should generally be around 150–600ms.
+
+## 11. Reduced motion
+
+Always support:
+
+`prefers-reduced-motion: reduce`
+
+When reduced motion is requested:
+
+- disable floating
+- disable rotation
+- disable orbit
+- minimize unnecessary transitions
+
+The visual composition should remain valid without animation.
+
+## 12. Responsive decoration
+
+Desktop:
+- full decoration system
+- asymmetric composition
+- subtle overlaps
+
+Tablet:
+- approximately 60–70% of desktop decoration density
+- simpler overlaps
+
+Mobile:
+- approximately 25–40% of desktop decoration density
+- smaller objects
+- reduced animation
+- no risky overlaps
+- no horizontal overflow
+
+Functional content always takes priority.
+
+## 13. Cards
+
+Cards should share the same design language but do not need identical compositions.
+
+Supported conceptual variants:
+
+- default
+- minimal
+- lime
+- orange
+- blue
+- dark
+- featured
+
+Use:
+
+- strong structural borders
+- moderate radius
+- controlled spacing
+- limited shadows
+- clear hierarchy
+
+Avoid generic SaaS cards with excessive blur, glass, gradients, or shadows.
+
+## 14. Typography
+
+Use the established display/UI font system.
+
+Display typography should be:
+
+- bold
+- geometric
+- highly legible
+
+Use large, confident numerical typography for KPIs.
+
+Functional text, tables, forms, and metadata must remain highly readable.
+
+Do not sacrifice readability for stylistic typography.
+
+## 15. Data visualization
+
+Charts are operational components.
+
+Prioritize:
+
+- readability
+- clear labels
+- strong hierarchy
+- limited colors
+- minimal grid lines
+- responsive behavior
+
+Do not place distracting decoration inside chart plotting areas.
+
+## 16. Tables
+
+Tables must remain calm and readable.
+
+Use:
+
+- strong headers
+- clear columns
+- row hover
+- status badges
+- sorting/filtering where existing functionality supports them
+- accessible focus states
+
+Do not place decorative objects over dense data.
+
+## 17. Interaction states
+
+Every interactive component should have appropriate:
+
+- default
+- hover
+- active
+- focus
+- disabled
+- loading
+- success/error states where applicable
+
+Interaction feedback should feel tactile and geometric, using subtle translation, border changes, or hard-shadow shifts when appropriate.
+
+## 18. Accessibility
+
+Preserve or improve:
+
+- keyboard navigation
+- visible focus
+- semantic controls
+- adequate contrast
+- accessible labels
+- non-color-only status communication
+- reduced-motion support
+
+Decorative elements must never appear to be interactive controls.
+
+## 19. No arbitrary visual drift
+
+Do not introduce:
+
+- random new colors
+- unrelated gradients
+- unrelated shadows
+- inconsistent border widths
+- inconsistent corner radii
+- unrelated icon styles
+- unrelated animation styles
+
+If a new visual pattern is genuinely needed, first consider whether it belongs as a reusable design-system token or component variant.
+
+## 20. Implementation workflow
+
+For a new screen:
+
+1. Inspect existing implementation.
+2. Identify the operational hierarchy.
+3. Reuse the design tokens.
+4. Reuse existing components.
+5. Build the structural layout.
+6. Establish typography and color hierarchy.
+7. Add data visualization and functional controls.
+8. Add geometric decoration only after the functional composition works.
+9. Apply controlled deterministic decoration.
+10. Add subtle ambient animation.
+11. Validate responsive behavior.
+12. Validate accessibility.
+13. Run lint/typecheck/tests available in the project.
+14. Review for visual consistency with `docs/design/DESIGN_SYSTEM.md` and `docs/design/UI_ART_DIRECTION.md`.
+
+## 21. Review standard
+
+Before considering a UI task complete, verify:
+
+- Does the page remain operationally usable?
+- Is the primary information immediately understandable?
+- Are important KPIs dominant?
+- Are tables and charts readable?
+- Are interactions obvious?
+- Are decorations secondary?
+- Is randomness controlled and stable?
+- Are animations subtle?
+- Does the design work without animation?
+- Does the page work on mobile?
+- Is there no horizontal overflow?
+- Does the page use existing tokens/components?
+- Does the page look like part of the same product?
+
+## Golden rule
+
+Design the dashboard first. Use decoration to strengthen the composition afterward.
+
+The geometric system is a supporting visual language, never the content itself.
