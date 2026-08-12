@@ -80,8 +80,16 @@
    در منو این بار را کم نمی‌کند. جزئیات:
    [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) بخش P10.
 6. **سیگنال و CAS (P5/P6):** فقط اگر بعد از برگشت `avplay` به RUN هنوز تصویر/صدا نبود.
-7. **آخرین راه نرم:** reboot از راه دور (`reboot`)؛ فلش `.mupg` لازم نیست مگر پچ
-   معیوب شناخته‌شده باشد.
+7. **reboot اجباری (تأیید ۲۰۲۶-۰۸-۱۲):** اگر P1–P4 جواب نداد و Telnet زنده است،
+   **`/sbin/reboot -f`** (نه فقط `reboot`) — روی باکس آزمایش `sync; reboot` اجرا نشد.
+   Playbook کامل: [`docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md`](freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md)
+8. **خودکار:** `python tools/av_recovery_run.py`
+
+### بازیابی تأیید‌شده (۲۰۲۶-۰۸-۱۲)
+
+Iran International HD روی Badr پس از **`/sbin/reboot -f`** + پچ `bianbiang.sh` + زپ با ref
+صحیح (`1:0:2:82:2:1:1042FE9:0:0:0:`) برگشت. جزئیات، Motor/USALS، و نقشهٔ patch:
+[`docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md`](freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md).
 
 دستورهای آماده برای گام ۲ (از ریشهٔ مخزن، پس از تأیید شما):
 

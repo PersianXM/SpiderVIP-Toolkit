@@ -79,9 +79,10 @@ pip install -e ".[online,dev]"   # SSH اختیاری برای برخی مسیر
 spidervip diagnose --simulate --fault player-crash
 python tools/freeze_capture.py   # وقتی فریز دیدید؛ قبل از قطع برق
 python tools/freeze_pull.py
+python tools/av_recovery_run.py  # playbook خودکار (reboot -f + deploy + zap)
 ```
 
-راهنما: [عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) · [EN](docs/troubleshooting-en.md)
+راهنما: [بازیابی A/V ۲۰۲۶-۰۸-۱۲](docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md) · [عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) · [EN](docs/troubleshooting-en.md)
 
 ## پیش‌نیازها
 

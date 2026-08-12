@@ -7,10 +7,12 @@
 - بستهٔ تشخیص/تعمیر: `spidervip/freeze/`
 - CLI: `python -m spidervip.cli diagnose|repair|faults`
 - پچ‌های rootfs مرتبط: `patches/`
-- ابزار forensic / gadget: `tools/freeze_*.py`, `tools/deploy_freeze_watch.py`, `tools/ensure_gadget_up.py`, …
+- ابزار forensic / gadget: `tools/freeze_*.py`, `tools/deploy_freeze_watch.py`, `tools/av_recovery_run.py`, …
 
 ## مستندات مرتبط (مشترک در `docs/`)
 
+- **[`AV_RECOVERY_RUNBOOK_2026-08-12.md`](AV_RECOVERY_RUNBOOK_2026-08-12.md)** — روش بازیابی تأیید‌شده (۲۰۲۶-۰۸-۱۲)
+- [`AV_RECOVERY_RUNBOOK-en.md`](AV_RECOVERY_RUNBOOK-en.md) — English summary
 - `FREEZE_INCIDENT_2026-07-11.md`
 - `FREEZE_INCIDENT_GADGET_TEST_2026-07-11.md`
 - `AV_PIPELINE_MAP.md`
