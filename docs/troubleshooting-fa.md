@@ -113,9 +113,11 @@ python tools/deploy_freeze_watch.py
 ```
 
 ناظر در `/data/freeze_tools/` نصب می‌شود و از طریق `/home/gx/local/user_script`
-(مسیر موجود در `bianbiang.sh`) بعد از بوت دوباره بالا می‌آید. وقتی امضای فریز
-(~۶۰ثانیه `avplay=STOP` با `bianbiang` زنده) پایدار بماند، خودکار به
-`/data/freeze_snap/<timestamp>/` می‌نویسد.
+(مسیر موجود در `bianbiang.sh`) بعد از بوت دوباره بالا می‌آید. اگر امضای فریز
+حدود **۱۲۰ ثانیه** پایدار بماند (`avplay=STOP` / PID خالی / timeout خواندن MSP، با
+`bianbiang` زنده)، ابتدا اسنپ‌شات زمان‌دار می‌نویسد و سپس — با `AUTO_RECOVERY=1` —
+`live_prog` را backup کرده و **`/sbin/reboot -f`** می‌کند. حداکثر ۲ بازیابی در ۲۴ ساعت؛
+۳ دقیقهٔ اول بعد از بوت بازیابی نمی‌شود. خاموش کردن: `touch /data/freeze_tools/DISABLE_AUTO_RECOVERY`.
 
 ### وقتی همین الان فریز می‌بینید
 

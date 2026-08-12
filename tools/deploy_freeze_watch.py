@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Deploy on-box freeze watcher to /data/freeze_tools and start it.
+"""Deploy on-box freeze watcher + auto-recovery to /data/freeze_tools.
 
 Installs:
+  /data/freeze_tools/freeze_lib.sh
   /data/freeze_tools/freeze_dump.sh
   /data/freeze_tools/freeze_watch.sh
+  /data/freeze_tools/av_recovery.sh
+  /data/freeze_tools/motor_boot_restore.sh
   /data/freeze_tools/freeze_watch.conf
   /data/freeze_tools/autostart.sh
   /home/gx/local/user_script  (hook used by bianbiang.sh start_services)
@@ -13,6 +16,7 @@ Does not modify /usr/bin/bianbiang.sh on the live box.
 
 Usage:
   python tools/deploy_freeze_watch.py
+  python tools/deploy_freeze_watch.py --no-auto-recovery
 """
 from __future__ import annotations
 
@@ -26,8 +30,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = {
+    "freeze_lib.sh": os.path.join(HERE, "freeze_lib.sh"),
     "freeze_dump.sh": os.path.join(HERE, "freeze_dump.sh"),
     "freeze_watch.sh": os.path.join(HERE, "freeze_watch.sh"),
+    "av_recovery.sh": os.path.join(HERE, "av_recovery.sh"),
+    "motor_boot_restore.sh": os.path.join(HERE, "motor_boot_restore.sh"),
 }
 
 REMOTE_DIR = "/data/freeze_tools"
@@ -36,15 +43,31 @@ PORT = 23
 USER = "root"
 PASS = "root"
 
-CONF_BODY = """# freeze_watch.conf
+CONF_TEMPLATE = """# freeze_watch.conf — on-box A/V freeze watch + recovery
 INTERVAL_SEC=30
-HOLD_SEC=60
+# Longer than USALS move + zap (~50-60s) to avoid false reboot.
+HOLD_SEC=120
+# Forensic dump debounce when AUTO_RECOVERY=0
 COOLDOWN_SEC=1800
+# 1 = backup live_prog and /sbin/reboot -f after HOLD_SEC (validated 2026-08-12)
+AUTO_RECOVERY=%(auto)s
+# Do not recover during boot + first channel/USALS settle
+BOOT_GRACE_SEC=180
+# Cap automatic reboots in RECOVERY_WINDOW_SEC (anti reboot-loop)
+MAX_RECOVERIES=2
+RECOVERY_WINDOW_SEC=86400
+# Timed /proc/msp reads; dump aborts remaining grabs after DUMP_MAX_SEC
+MSP_READ_SEC=3
+DUMP_MAX_SEC=25
+# To disable without editing this file: touch /data/freeze_tools/DISABLE_AUTO_RECOVERY
 """
 
 AUTOSTART_BODY = """#!/bin/sh
 # Start freeze watch once per boot (idempotent).
 TOOLS=/data/freeze_tools
+if [ -f "$TOOLS/motor_boot_restore.sh" ]; then
+    sh "$TOOLS/motor_boot_restore.sh"
+fi
 if [ -f "$TOOLS/freeze_watch.sh" ]; then
     if ! pidof -x freeze_watch.sh >/dev/null 2>&1; then
         # busybox pidof may not support -x; fall back to grep
@@ -183,9 +206,14 @@ def push_file(s, local_path: str, remote_path: str) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Deploy freeze_watch to the receiver")
+    ap = argparse.ArgumentParser(description="Deploy freeze_watch + on-box auto-recovery")
     ap.add_argument("--host", default=DEFAULT_HOST)
     ap.add_argument("--no-start", action="store_true", help="install only; do not start watcher")
+    ap.add_argument(
+        "--no-auto-recovery",
+        action="store_true",
+        help="install watcher/dump only; do not enable reboot -f",
+    )
     args = ap.parse_args()
 
     for name, path in FILES.items():
@@ -207,7 +235,8 @@ def main() -> int:
         print("  md5 %s %s" % (md5, "OK" if md5 == remote else "MISMATCH(%s)" % remote))
 
     print("pushing conf + autostart + user_script ...", flush=True)
-    push_bytes(s, CONF_BODY.encode(), REMOTE_DIR + "/freeze_watch.conf")
+    conf_body = CONF_TEMPLATE % {"auto": "0" if args.no_auto_recovery else "1"}
+    push_bytes(s, conf_body.encode(), REMOTE_DIR + "/freeze_watch.conf")
     push_bytes(s, AUTOSTART_BODY.encode(), REMOTE_DIR + "/autostart.sh")
     # Only replace user_script if missing or previously ours
     existing = run(s, "head -n 1 /home/gx/local/user_script 2>/dev/null", 10)
@@ -237,7 +266,8 @@ def main() -> int:
         ps = run(s, "ps ax 2>/dev/null | grep '[f]reeze_watch.sh' || echo NONE", 15)
         print("watcher: %s" % (ps if ps.strip() else "NONE"), flush=True)
 
-    print("DONE. Manual capture: python tools/freeze_capture.py", flush=True)
+    print("DONE. On-box auto-recovery AUTO_RECOVERY=%s" % ("0" if args.no_auto_recovery else "1"), flush=True)
+    print("Manual capture: python tools/freeze_capture.py", flush=True)
     try:
         s.sendall(b"exit\r\n")
     except Exception:

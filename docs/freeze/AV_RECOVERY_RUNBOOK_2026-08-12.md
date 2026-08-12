@@ -174,23 +174,52 @@ python tools/av_recovery_run.py --zap-ref "1:0:2:82:2:1:1042FE9:0:0:0:"
 
 ## ۶. مسیر patch اصلاحی
 
-### الان در `patches/` (استقرار دستی / `av_recovery_run.py --deploy-only`)
+### الان در `patches/` و `/data/freeze_tools/`
 
 | پچ | فایل | اثر |
 |----|------|-----|
-| ISSUE-001/002 | `patches/usr/bin/bianbiang.sh` | respawn UI؛ نظارت سرویس‌ها؛ هوک `user_script`/`dbgbar` |
+| ISSUE-001/002 | `patches/usr/bin/bianbiang.sh` | respawn UI؛ نظارت سرویس‌ها؛ هوک `user_script` |
 | ISSUE-003 | `patches/etc/sysctl.conf` | فشار RAM کمتر |
-| Forensic | `tools/deploy_freeze_watch.py` | اسنپ‌شوت خودکار روی امضای فریز |
+| Forensic + بازیابی روی باکس | `tools/deploy_freeze_watch.py` | ناظر، dump با timeout، `av_recovery.sh` |
 
-### پیشنهاد patch نسل بعد (طراحی — پیاده‌سازی جزئی)
+استقرار (یک‌بار؛ بدون نیاز به PC در زمان فریز):
 
-1. **`av_recovery.sh` روی باکس** (در `/data/freeze_tools/`):
-   - اگر `freeze_watch` برای `HOLD_SEC` فریز دید → `live_prog` backup → `reboot -f`
-   - فقط با `AUTO_RECOVERY=1` در `freeze_watch.conf` (پیش‌فرض **خاموش**)
-2. **بهبود `freeze_dump.sh`:** timeout روی خواند `/proc/msp/*` تا hang نکند
-3. **Motor auto-restore:** پس از reboot، اگر `motor_profile.json` روی PC/console موجود است،
-   inject windows به `live_prog` بدون `servicelistreload` دوباره
-4. **dbgbar (اختیاری):** هشدار `VDEC HANG` روی TV قبل از فریز کامل
+```powershell
+python tools/deploy_freeze_watch.py
+```
+
+### بازیابی خودکار روی خود رسیور (پیاده‌سازی‌شده)
+
+پس از بوت، `user_script` → `autostart.sh` ناظر را بالا می‌آورد. اگر امضای فریز
+(`bianbiang` زنده + `avplay=STOP`/`VidPid=0x1fff`/timeout خواندن MSP + معمولاً بدون `vdec00`)
+برای **`HOLD_SEC=120`** بماند:
+
+1. dump زمان‌دار به `/data/freeze_snap/` (حداکثر ~۲۵ثانیه؛ دیگر hang پنج‌دقیقه‌ای ندارد)
+2. backup `live_prog` → `/data/live_prog_usals_ok.bak` و `live_prog.last_good`
+3. **`/sbin/reboot -f`**
+4. فریمور کانال آخر را از سر می‌گیرد (زپ اجباری به کانال تست انجام نمی‌شود)
+
+**قفل‌های ایمنی (کمترین ریسک reboot بی‌جا):**
+
+| قفل | مقدار | چرا |
+|-----|--------|-----|
+| `HOLD_SEC` | ۱۲۰ ثانیه | طولانی‌تر از حرکت USALS + زپ (~۵۰–۶۰ثانیه) |
+| `BOOT_GRACE_SEC` | ۱۸۰ ثانیه | بوت + قفل اول کانال |
+| `MAX_RECOVERIES` | ۲ در ۲۴ ساعت | جلوگیری از حلقهٔ reboot (مثلاً بی‌سیگنال) |
+| `DISABLE_AUTO_RECOVERY` | فایل اختیاری | `touch /data/freeze_tools/DISABLE_AUTO_RECOVERY` |
+| `AUTO_RECOVERY=0` | در conf | خاموش کردن بدون حذف اسکریپت‌ها |
+
+خواندن `/proc/msp/*` با timeout است و روی فرآیند D-state **wait نمی‌شود**؛ وگرنه خود ناظر مثل `freeze_capture` گیر می‌کرد و هرگز reboot نمی‌کرد.
+
+### Motor پس از reboot
+
+`reboot -f` فیلد Motor/USALS را پاک نمی‌کند (شاهد ۱۲ اوت: md5 `live_prog` ثابت ماند).
+`motor_boot_restore.sh` فقط اگر `/data/gx/live_prog` **حذف یا خالی** باشد از backup برمی‌گرداند.
+merge از `motor_profile.json` روی PC برای Favorite Apply / `servicelistreload` است، نه برای این مسیر.
+
+### تعویق‌شده
+
+- **dbgbar** — در این مرحله نصب نمی‌شود.
 
 ### آنچه patch **نمی‌تواند** حل کند
 
@@ -209,4 +238,4 @@ python tools/av_recovery_run.py --zap-ref "1:0:2:82:2:1:1042FE9:0:0:0:"
 
 ---
 
-*آخرین به‌روزرسانی: ۲۰۲۶-۰۸-۱۲ — تأیید کاربر: Iran International HD صدا/تصویر برگشت.*
+*آخرین به‌روزرسانی: ۲۰۲۶-۰۸-۱۲ — بازیابی خودکار روی باکس (`AUTO_RECOVERY=1`) پیاده شد؛ dbgbar تعویق.*

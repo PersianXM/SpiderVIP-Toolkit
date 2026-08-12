@@ -106,8 +106,11 @@ python tools/deploy_freeze_watch.py
 
 Installs under `/data/freeze_tools/` and hooks `/home/gx/local/user_script` (already
 called from `bianbiang.sh`) so the watcher returns after boot. When the freeze
-signature holds (~60s of `avplay=STOP` with `bianbiang` alive), it writes
-`/data/freeze_snap/<timestamp>/` automatically.
+signature holds (~120s of `avplay=STOP` / null PID / MSP read timeout, with
+`bianbiang` alive), it writes a time-bounded snapshot and — with `AUTO_RECOVERY=1` —
+backs up `live_prog` and runs `/sbin/reboot -f`. Max 2 recoveries per 24h; skipped
+during the first 3 minutes after boot. Disable with
+`touch /data/freeze_tools/DISABLE_AUTO_RECOVERY`.
 
 ### When you see a freeze right now
 

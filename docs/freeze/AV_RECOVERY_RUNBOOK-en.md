@@ -30,5 +30,11 @@ Automated: `python tools/av_recovery_run.py`
 
 ## Patch status
 
-- **Shipped in repo:** `patches/usr/bin/bianbiang.sh`, `patches/etc/sysctl.conf`, `tools/deploy_freeze_watch.py`
-- **Proposed next:** optional auto-reboot in `freeze_watch.conf`, non-blocking `freeze_dump.sh`, motor restore from `motor_profile.json`
+- **On-box auto-recovery (default on):** `python tools/deploy_freeze_watch.py`
+  - `HOLD_SEC=120`, `BOOT_GRACE_SEC=180`, max 2 reboots / 24h
+  - timed `/proc/msp` reads so dump/watch cannot hang
+  - `av_recovery.sh` → backup `live_prog` → `/sbin/reboot -f`
+  - `motor_boot_restore.sh` only if `live_prog` is missing/empty
+- **Shipped in repo:** `patches/usr/bin/bianbiang.sh`, `patches/etc/sysctl.conf`
+- **Deferred:** dbgbar OSD
+- Disable: `touch /data/freeze_tools/DISABLE_AUTO_RECOVERY` or `--no-auto-recovery`

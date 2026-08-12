@@ -20,8 +20,10 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+LIB_LOCAL = os.path.join(HERE, "freeze_lib.sh")
 DUMP_LOCAL = os.path.join(HERE, "freeze_dump.sh")
 REMOTE_DIR = "/data/freeze_tools"
+REMOTE_LIB = REMOTE_DIR + "/freeze_lib.sh"
 REMOTE_DUMP = REMOTE_DIR + "/freeze_dump.sh"
 
 DEFAULT_HOST = "192.168.100.102"
@@ -151,6 +153,9 @@ def main() -> int:
     if not os.path.isfile(DUMP_LOCAL):
         print("missing %s" % DUMP_LOCAL, file=sys.stderr)
         return 1
+    if not os.path.isfile(LIB_LOCAL):
+        print("missing %s" % LIB_LOCAL, file=sys.stderr)
+        return 1
 
     print("connecting to %s ..." % args.host, flush=True)
     s = login(args.host)
@@ -158,15 +163,20 @@ def main() -> int:
 
     run(s, "mkdir -p %s /data/freeze_snap" % REMOTE_DIR, 15, idx=1)
     run(s, "rm -f %s/dump.lock" % REMOTE_DIR, 10, idx=2)
+    print("pushing freeze_lib.sh ...", flush=True)
+    lib_md5 = push_text(s, LIB_LOCAL, REMOTE_LIB)
+    remote_lib = run(s, "md5sum %s" % REMOTE_LIB, 15, idx=3).split()
+    remote_lib = remote_lib[0] if remote_lib else "?"
+    print("lib md5 host=%s device=%s %s" % (lib_md5, remote_lib, "OK" if lib_md5 == remote_lib else "MISMATCH"))
     print("pushing freeze_dump.sh ...", flush=True)
     md5 = push_text(s, DUMP_LOCAL, REMOTE_DUMP)
-    remote_md5 = run(s, "md5sum %s" % REMOTE_DUMP, 15, idx=3).split()
+    remote_md5 = run(s, "md5sum %s" % REMOTE_DUMP, 15, idx=4).split()
     remote_md5 = remote_md5[0] if remote_md5 else "?"
     print("md5 host=%s device=%s %s" % (md5, remote_md5, "OK" if md5 == remote_md5 else "MISMATCH"))
 
     print("running dump (reason=%s) ..." % args.reason, flush=True)
-    # IRQ sample sleeps inside dump; allow headroom
-    out = run(s, "sh %s %s" % (REMOTE_DUMP, args.reason), 300, idx=4)
+    # Timed MSP reads; dump budget is DUMP_MAX_SEC plus a small irq sample.
+    out = run(s, "sh %s %s" % (REMOTE_DUMP, args.reason), 90, idx=5)
     print(out, flush=True)
 
     # show SUMMARY if path known
@@ -178,7 +188,7 @@ def main() -> int:
                 snap = parts[1]
     if snap:
         print("\n--- SUMMARY ---", flush=True)
-        print(run(s, "cat %s/SUMMARY.txt" % snap, 30, idx=5), flush=True)
+        print(run(s, "cat %s/SUMMARY.txt" % snap, 30, idx=6), flush=True)
         print("\nSnapshot on box: %s" % snap, flush=True)
         print("After recovery: python tools/freeze_pull.py", flush=True)
     else:

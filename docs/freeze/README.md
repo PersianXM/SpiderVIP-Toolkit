@@ -11,7 +11,7 @@
 
 ## مستندات مرتبط (مشترک در `docs/`)
 
-- **[`AV_RECOVERY_RUNBOOK_2026-08-12.md`](AV_RECOVERY_RUNBOOK_2026-08-12.md)** — روش بازیابی تأیید‌شده (۲۰۲۶-۰۸-۱۲)
+- **[`AV_RECOVERY_RUNBOOK_2026-08-12.md`](AV_RECOVERY_RUNBOOK_2026-08-12.md)** — روش بازیابی تأیید‌شده + بازیابی خودکار روی باکس
 - [`AV_RECOVERY_RUNBOOK-en.md`](AV_RECOVERY_RUNBOOK-en.md) — English summary
 - `FREEZE_INCIDENT_2026-07-11.md`
 - `FREEZE_INCIDENT_GADGET_TEST_2026-07-11.md`

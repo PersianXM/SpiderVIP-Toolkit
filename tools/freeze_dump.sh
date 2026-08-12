@@ -1,6 +1,7 @@
 #!/bin/sh
 # freeze_dump.sh — write a durable forensic snapshot under /data/freeze_snap/<ts>/
 # Busybox/ash friendly. Safe: read-only probes + writes only under /data.
+# MSP /proc nodes are read with a timeout so a wedged play path cannot hang dump.
 #
 # Usage: freeze_dump.sh <reason>
 #   reason: manual | watch | unknown
@@ -8,6 +9,24 @@
 REASON="${1:-unknown}"
 BASE="/data/freeze_snap"
 TOOLS="/data/freeze_tools"
+
+HAVE_TIMED_GRAB=0
+if [ -f "$TOOLS/freeze_lib.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$TOOLS/freeze_lib.sh"
+    freeze_load_conf
+    HAVE_TIMED_GRAB=1
+fi
+
+DUMP_MAX_SEC=${DUMP_MAX_SEC:-25}
+MSP_READ_SEC=${MSP_READ_SEC:-3}
+DUMP_T0=$(date +%s 2>/dev/null || echo 0)
+
+dump_over_budget() {
+    now=$(date +%s 2>/dev/null || echo 0)
+    elapsed=$((now - DUMP_T0))
+    [ "$elapsed" -ge "$DUMP_MAX_SEC" ] 2>/dev/null
+}
 
 # Avoid overlapping dumps
 LOCK="$TOOLS/dump.lock"
@@ -34,9 +53,16 @@ mkdir -p "$DIR" || { rm -f "$LOCK"; echo "DUMP_FAIL mkdir"; exit 1; }
 } > "$DIR/SUMMARY.txt"
 sync
 
-# Bounded reads — some /proc/msp nodes return EAGAIN or block
+# $1=src $2=dst — never block dump on wedged MSP
 grab() {
-    # $1=src $2=dst
+    if dump_over_budget; then
+        echo "grab_skipped_budget:$1" > "$2"
+        return 124
+    fi
+    if [ "$HAVE_TIMED_GRAB" = "1" ]; then
+        freeze_timed_grab "$1" "$2"
+        return $?
+    fi
     head -c 131072 "$1" > "$2" 2>&1 || echo "grab_fail:$1" >> "$2"
 }
 
@@ -63,16 +89,20 @@ grab /proc/msp/demux_main "$DIR/demux_main.txt"
 grab /proc/msp/disp0 "$DIR/disp0.txt"
 grab /proc/msp/chip_temp "$DIR/chip_temp.txt"
 
-# IRQ rate: two short samples (~2s). Prefer head to avoid huge hangs.
-{
-    echo "=== sample1 ==="
-    date 2>/dev/null
-    head -c 65536 /proc/interrupts 2>/dev/null
-    sleep 2
-    echo "=== sample2 ==="
-    date 2>/dev/null
-    head -c 65536 /proc/interrupts 2>/dev/null
-} > "$DIR/irq.txt" 2>&1
+# IRQ rate: two short samples (~2s). Skip if dump budget is already gone.
+if dump_over_budget; then
+    echo "irq_skipped_budget" > "$DIR/irq.txt"
+else
+    {
+        echo "=== sample1 ==="
+        date 2>/dev/null
+        head -c 65536 /proc/interrupts 2>/dev/null
+        sleep 2
+        echo "=== sample2 ==="
+        date 2>/dev/null
+        head -c 65536 /proc/interrupts 2>/dev/null
+    } > "$DIR/irq.txt" 2>&1
+fi
 
 {
     echo "=== ps ax ==="
@@ -129,6 +159,8 @@ grep -q 'Vid Enable[[:space:]]*:FALSE' "$DIR/avplay.txt" 2>/dev/null && add_tag 
 grep -q 'VidPid[[:space:]]*:0x1fff' "$DIR/avplay.txt" 2>/dev/null && add_tag VID_PID_NULL
 grep -q 'CrtStatus[[:space:]]*:STOP' "$DIR/sync.txt" 2>/dev/null && add_tag SYNC_STOP
 grep -qi 'Resource temporarily unavailable' "$DIR/avplay.txt" 2>/dev/null && add_tag AVPLAY_EAGAIN
+grep -q 'grab_timeout:' "$DIR/avplay.txt" 2>/dev/null && add_tag AVPLAY_TIMEOUT
+grep -q 'grab_skipped_budget:' "$DIR/"*.txt 2>/dev/null && add_tag DUMP_PARTIAL
 
 ls /proc/msp/vdec00 >/dev/null 2>&1 || add_tag NO_VDEC
 ls /proc/msp/win0100 >/dev/null 2>&1 || add_tag NO_WIN
