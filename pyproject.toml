@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spidervip-toolkit"
-version = "0.1.0"
+dynamic = ["version"]
 description = "SpiderVIP toolkit: A/V freeze diagnose/repair, channel & favorite management, and frequency/TP sync"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -13,6 +13,7 @@ dependencies = []
 [project.optional-dependencies]
 online = ["paramiko>=3.0"]
 console = ["flask>=3.0", "requests>=2.31", "beautifulsoup4>=4.12"]
+overlay = ["pywebview>=5"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]
@@ -20,6 +21,9 @@ spidervip = "spidervip.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["spidervip*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "spidervip._version.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,33 @@
+---
+description: SemVer for SpiderVIP Toolkit — bump and display app version on every user-facing change.
+alwaysApply: true
+---
+
+# SpiderVIP versioning (SemVer)
+
+Single source of truth: `spidervip/_version.py` → `__version__`  
+(also exposed as `spidervip.__version__` and `pyproject.toml` dynamic version).
+
+## When you change the product
+
+On **any** user-facing change (UI, API behavior, Console/Channels/Frequency, Apply, launcher), **bump the version in the same change** before finishing:
+
+| Bump | Use when |
+|------|----------|
+| **PATCH** `x.y.Z` | Bug fix, polish, copy, error-message clarity |
+| **MINOR** `x.Y.0` | New backward-compatible feature or visible capability |
+| **MAJOR** `X.0.0` | Breaking CLI/API/operator workflow |
+
+Do **not** leave `__version__` unchanged after a shipped UI/backend behavior change.
+
+Docs-only / comment-only / pure test refactors with no runtime behavior change: no bump required.
+
+## Display
+
+Version must remain visible in the UI corner badge (`#appVersion` / `.app-version`) on Console, Channels, and Frequency. Keep `stamp_html` / `__SPIDERVIP_VERSION__` working. Startup logs and `spidervip -V` should match the badge.
+
+## Do not
+
+- Invent a second version string in HTML/CSS/JS
+- Bump only in README while leaving `_version.py` stale
+- Skip the bump “because it’s small” if operators can see or feel the change

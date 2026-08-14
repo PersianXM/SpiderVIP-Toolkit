@@ -8,6 +8,7 @@ Topics (see docs/TOPICS.md):
 - ``spidervip.console`` — reserved unified SpiderVIP Console shell
 """
 
+from ._version import __version__
 from .freeze import (
     CHECKS,
     PATCHES,
@@ -34,6 +35,5 @@ __all__ = [
     "PATCHES",
     "patch_for_finding",
     "repair",
+    "__version__",
 ]
-
-__version__ = "0.1.0"
