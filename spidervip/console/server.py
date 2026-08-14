@@ -149,6 +149,26 @@ def _inject_page(
     return text.encode("utf-8")
 
 
+def _proxy_timeout_for(mount: str, subpath: str, method: str) -> float:
+    """Socket idle timeout for Console→child proxy (seconds).
+
+    Keep modest for most routes: a long hang usually means a backend bug
+    (e.g. hashing live_prog), not a need for a 15‑minute proxy window.
+    Favorite Apply with reboot is intentionally long (commit + motor restore
+    + reboot + verify) and must not die as an opaque HTML/proxy 500.
+    """
+    path = (subpath or "").strip("/").lower()
+    method_u = (method or "GET").upper()
+    mount_n = mount.rstrip("/")
+    if mount_n == "/frequencies" and path == "send_to_receiver" and method_u == "POST":
+        return 120.0
+    if mount_n == "/channels" and path == "api/receiver/apply" and method_u == "POST":
+        return 600.0
+    if method_u in ("POST", "PUT", "PATCH"):
+        return 90.0
+    return 60.0
+
+
 def _proxy_to_backend(
     backend_port: int,
     mount: str,
@@ -159,8 +179,12 @@ def _proxy_to_backend(
     body: bytes,
     headers: Dict[str, str],
     connection: Optional[Dict[str, Any]] = None,
+    timeout: Optional[float] = None,
 ):
-    from flask import Response
+    from flask import Response, jsonify
+
+    if timeout is None:
+        timeout = _proxy_timeout_for(mount, subpath, method)
 
     path = "/" + (subpath or "")
     if query:
@@ -180,19 +204,58 @@ def _proxy_to_backend(
     }
     fwd_headers = {k: v for k, v in headers.items() if k.lower() not in hop_by_hop}
 
-    conn = HTTPConnection("127.0.0.1", backend_port, timeout=120)
+    conn = None
     try:
-        conn.request(method, path, body=body or None, headers=fwd_headers)
+        # Idle socket timeout must cover the full backend handler for long
+        # deploy routes (response headers are not sent until the route returns).
+        conn = HTTPConnection("127.0.0.1", backend_port, timeout=float(timeout))
+        # Always pass body bytes — `body or None` drops empty POST payloads.
+        conn.request(method, path, body=body if body is not None else b"", headers=fwd_headers)
         resp = conn.getresponse()
         raw = resp.read()
         resp_headers = {k: v for k, v in resp.getheaders() if k.lower() not in hop_by_hop}
         ctype = resp_headers.get("Content-Type") or resp_headers.get("content-type") or ""
+        # If an API-ish path somehow got an HTML error page from the backend,
+        # wrap it as JSON so the Frequency UI never hits SyntaxError on DOCTYPE.
+        api_like = bool(subpath) and not str(subpath).endswith(
+            (".html", ".css", ".js", ".map", ".svg", ".png", ".ico")
+        )
+        if api_like and "text/html" in ctype.lower():
+            snippet = raw[:160].decode("utf-8", errors="replace").replace("\n", " ")
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"پاسخ HTML از بک‌اند (HTTP {resp.status}) به‌جای JSON.",
+                    "hint": f"مسیر پروکسی: {mount}/{subpath} → backend {path}",
+                    "snippet": snippet,
+                }
+            ), 502
         raw = _inject_page(raw, ctype, mount, connection=connection)
         excluded = {"content-length", "Content-Length"}
         out_headers = [(k, v) for k, v in resp_headers.items() if k not in excluded]
         return Response(raw, status=resp.status, headers=out_headers)
+    except Exception as exc:  # noqa: BLE001 — never return Flask HTML 500 to module UIs
+        exc_s = str(exc).lower()
+        timed_out = "timed out" in exc_s or "timeout" in exc_s
+        hint = f"mount={mount} path={path} backend_port={backend_port} timeout={timeout}s"
+        if timed_out:
+            hint += (
+                " — انتقال ممکن است هنوز روی بک‌اند در حال اجرا باشد؛ "
+                "کنسول را ری‌استارت کنید و دوباره تلاش کنید."
+            )
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"پراکسی کنسول به بک‌اند ناموفق بود: {exc}",
+                "hint": hint,
+            }
+        ), 502
     finally:
-        conn.close()
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _push_connection_to_channels(channels_port: int, conn: ReceiverConnection, *, simulate: bool) -> Dict[str, Any]:
@@ -262,6 +325,28 @@ def create_console_app(
     app.config["_BACKEND_SERVERS"] = (channels_server, frequency_server)
     app.config["CONNECTION_STORE"] = store
     app.config["CHANNELS_SIMULATE_DEFAULT"] = channels_simulate
+
+    @app.errorhandler(404)
+    def _console_json_404(err):
+        # Frequency UI sometimes posts to /send_to_receiver without mount prefix;
+        # return JSON instead of HTML DOCTYPE so the page shows a clear hint.
+        accept = (request.headers.get("Accept") or "").lower()
+        wants_json = (
+            "application/json" in accept
+            or request.method in ("POST", "PUT", "PATCH", "DELETE")
+            or request.path.rstrip("/").endswith(
+                ("/send_to_receiver", "/apply", "/scrape", "/load_receiver", "/satellites")
+            )
+        )
+        if wants_json:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"مسیر روی کنسول پیدا نشد: {request.path}",
+                    "hint": "از /frequencies/ باز کنید (مثلاً /frequencies/send_to_receiver).",
+                }
+            ), 404
+        return err.get_response()
 
     @app.get("/")
     def shell():
@@ -338,6 +423,7 @@ def create_console_app(
     @app.route("/frequencies/", defaults={"subpath": ""}, methods=methods)
     @app.route("/frequencies/<path:subpath>", methods=methods)
     def frequencies_proxy(subpath: str):
+        # Timeout is chosen by _proxy_timeout_for (send_to_receiver → 120s).
         return _proxy_to_backend(
             app.config["FREQUENCY_BACKEND_PORT"],
             "/frequencies",

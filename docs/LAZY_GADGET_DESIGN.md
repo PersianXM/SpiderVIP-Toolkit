@@ -75,11 +75,36 @@ holder chain (از lsmod روی دستگاه زنده):
 4. **hookهای feature** — نقاطی که upgrade/PC-Link/recovery صدا می‌زنند، `gadgetctl up/down`
    را فرا بخوانند.
 
-## کارهای بازِ لازم پیش از پیاده‌سازیِ ایمن
-- **[بلاکر] یافتنِ نقطهٔ لودِ واقعیِ `g_service`** (لودرِ اختصاصیِ بوت؛ در `/etc` نیست).
-- **[بلاکر] تعیینِ قطعیِ منبع IRQ ~۳۱۳/s** (`g_service` یا `hi_dvb`) با یک تستِ کنترل‌شده،
-  تا هدفِ «کاهش IRQ» واقع‌بینانه بماند.
-- **مسیر بازگشت (rollback)** روی رسیورِ زنده، چون تغییرِ بوت سخت‑برگشت‌پذیر است.
+## نقطهٔ لود بوت (یافتهٔ ۲۰۲۶-۰۸-۰۸ — قطعی)
+
+```
+/etc/rcS.d/S01clap-loadmodules
+  -> /etc/init.d/clap-loadmodules
+  -> cd /lib/modules/4.4.176/extra/ && ./load
+
+داخل load (ASCII):
+  insmod udc-hisi.ko
+  insmod libcomposite.ko
+  insmod usb_f_service.ko
+  insmod g_service.ko      ← فقط این خط هدف lazy-boot است
+  insmod u_service.ko
+  insmod hi-dvb.ko
+```
+
+ابزار برگشت‌پذیر (بدون `rmmod` زنده):
+
+```powershell
+python tools/g_service_bootctl.py status
+python tools/g_service_bootctl.py disable   # کامنت کردن insmod؛ بعد reboot
+python tools/g_service_bootctl.py enable    # برگرداندن؛ بعد reboot
+```
+
+بکاپ: `/data/load.g_service_bootctl.bak`
+
+## کارهای بازِ باقی‌مانده
+- **[بلاکر جزئی] تعیینِ قطعیِ منبع IRQ ~۳۱۳/s** (`g_service` یا `hi_dvb`) با مقایسهٔ
+  قبل/بعد از `disable` + reboot (آزمون A/B).
+- پایش فریز بعد از disable: اگر فریز ادامه یافت، مقصر اصلی مسیر Live-TV است نه `g_service`.
 
 ## جمع‌بندیِ صادقانه
 - بخشِ قابل‌حذف در idle **فقط `g_service`** است؛ بقیهٔ استک برای Live TV لازم است.

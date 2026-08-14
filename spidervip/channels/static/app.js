@@ -52,7 +52,13 @@
       ...opts,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || res.statusText || "Request failed");
+    if (!res.ok) {
+      const reportMsg = data.report && data.report.message;
+      const hint = data.hint ? ` (${data.hint})` : "";
+      throw new Error(
+        (data.error || reportMsg || res.statusText || "Request failed") + hint
+      );
+    }
     return data;
   }
 
@@ -482,20 +488,20 @@
         </div>
         <div class="fav-actions">
           <button class="fav-act top" type="button" title="Move to top" data-top="${escapeAttr(ref)}" aria-label="Move to top">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path fill="currentColor" d="M3 2h10v1.75H3z"/>
-              <path fill="currentColor" d="M8 4.6 3.9 8.7h2.35V14h3.5V8.7h2.35z"/>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M3 2.5h10v2H3z"/>
+              <path fill="currentColor" d="M8 5.25 4 9.25h2.5V13.5h3V9.25H12z"/>
             </svg>
           </button>
           <button class="fav-act bottom" type="button" title="Move to bottom" data-bottom="${escapeAttr(ref)}" aria-label="Move to bottom">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path fill="currentColor" d="M8 11.4 12.1 7.3H9.75V2H6.25v5.3H3.9z"/>
-              <path fill="currentColor" d="M3 12.25h10V14H3z"/>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M8 10.75 12 6.75H9.5V2.5h-3v4.25H4z"/>
+              <path fill="currentColor" d="M3 11.5h10v2H3z"/>
             </svg>
           </button>
           <button class="fav-act remove" type="button" title="Remove" data-rm="${escapeAttr(ref)}" aria-label="Remove">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path fill="currentColor" d="m4.05 3.15-.9.9L7.1 8l-3.95 3.95.9.9L8 8.9l3.95 3.95.9-.9L8.9 8l3.95-3.95-.9-.9L8 7.1z"/>
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M4.22 3.16 3.16 4.22 7.06 8l-3.9 3.9.94.94L8 8.94l3.9 3.9.94-.94L8.94 8l3.9-3.9-.94-.94L8 7.06z"/>
             </svg>
           </button>
         </div>
@@ -833,11 +839,6 @@
   $("btnFavMoveUp").addEventListener("click", () => moveFavoriteSelection("up"));
   $("btnFavMoveDown").addEventListener("click", () => moveFavoriteSelection("down"));
 
-  $("btnBackup").addEventListener("click", async () => {
-    const res = await api("/api/backup", { method: "POST", body: "{}" });
-    toast(`Backup saved: ${res.filename}`);
-  });
-
   $("restoreFile").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -973,14 +974,21 @@
       stopFlag.done = true;
       await poller;
       const report = res.report || {};
-      $("applyStatus").textContent = `${report.status}: ${report.message}`;
+      const failed =
+        res.ok === false
+        || String(report.status || "").toLowerCase().includes("fail")
+        || !(String(report.status || "").toLowerCase().includes("completed") && report.verified !== false);
+      $("applyStatus").textContent = `${report.status || (failed ? "Failed" : "Completed")}: ${
+        report.message || res.error || ""
+      }`;
       $("applySteps").innerHTML = (report.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
-      if (String(report.status || "").toLowerCase().includes("completed") && report.verified !== false) {
-        setApplyProgress({ filled: 5, current: 0, failed: false });
-      } else {
+      if (failed) {
         setApplyProgress({ filled: 0, current: 3, failed: true });
+        toast(report.message || res.error || "Apply failed");
+      } else {
+        setApplyProgress({ filled: 5, current: 0, failed: false });
+        toast(report.message || report.status);
       }
-      toast(report.message || report.status);
     } catch (err) {
       stopFlag.done = true;
       await poller;
@@ -991,6 +999,9 @@
       $("btnApply").disabled = false;
     }
   });
+
+  const downloadBackup = $("btnDownloadBackup");
+  if (downloadBackup) downloadBackup.href = withMount("/api/backup/download");
 
   setupFavoriteDropZone();
   (async () => {

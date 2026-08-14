@@ -100,6 +100,63 @@ end
     assert favs[0].channel_refs == [channels[0].ref]
 
 
+
+def test_parse_lamedb_omitted_empty_name_line_does_not_cascade():
+    """Some receivers omit the blank name line when SDT name is missing."""
+
+    lamedb = """eDVB services /4/
+transponders
+01040000:022f:0510
+\ts 11976000:27500000:0:3:260:2:0
+/
+end
+services
+0001:01040000:022f:0510:1:0
+Good Channel
+p:OK
+0002:01040000:022f:0510:1:0
+p:NoName,c:0007d8,c:011fff,c:03
+0003:01040000:022f:0510:1:0
+Another Good
+p:Prov
+0004:01040000:022f:0510:1:0
+p:ALMAJD,c:000131,c:011fff,c:03
+end
+"""
+    channels = parse_lamedb(lamedb)
+    assert [c.name for c in channels] == [
+        "Good Channel",
+        "Service 2",
+        "Another Good",
+        "ALMAJD",
+    ]
+    assert [c.provider for c in channels] == ["OK", "NoName", "Prov", "ALMAJD"]
+    assert [c.service_id for c in channels] == ["0001", "0002", "0003", "0004"]
+
+
+def test_parse_lamedb_blank_name_line_still_works():
+    lamedb = """eDVB services /4/
+transponders
+01040000:022f:0510
+\ts 11976000:27500000:0:3:260:2:0
+/
+end
+services
+0002:01040000:022f:0510:1:0
+
+p:NoName,c:0007d8,c:011fff,c:03
+0003:01040000:022f:0510:1:0
+Named
+p:Prov
+end
+"""
+    channels = parse_lamedb(lamedb)
+    assert len(channels) == 2
+    assert channels[0].name == "Service 2"
+    assert channels[0].provider == "NoName"
+    assert channels[1].name == "Named"
+
+
 def test_lamedb_roundtrip():
     original = parse_lamedb(SAMPLE_LAMEDB)
     text = channels_to_lamedb(original)
@@ -328,6 +385,77 @@ def test_apply_upload_failure(manager: FavoriteManager):
     report = SafeApplyPipeline(manager, receiver).apply(reboot=True)
     assert report.status == OperationStatus.FAILED
     assert "upload" in report.message.lower()
+
+
+def test_commit_service_list_falls_back_to_webif_9095(monkeypatch):
+    """Lab boxes often expose OpenWebif on 9095; port 80 alone must not fail Apply."""
+
+    from spidervip.channels.live_receiver import LiveChannelReceiver
+
+    calls = []
+
+    class _Resp:
+        def __init__(self, body: bytes):
+            self._body = body
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(url, timeout=0):  # noqa: ARG001
+        calls.append(url)
+        if ":9095" in url:
+            return _Resp(b"<e2state>True</e2state>\nreloaded both")
+        import urllib.error
+
+        raise urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    rx = LiveChannelReceiver("10.0.0.9", webif_port=80)
+    body = rx.commit_service_list()
+    assert "True" in body
+    assert any("http://10.0.0.9/web/servicelistreload" in u for u in calls)
+    assert any(":9095/web/servicelistreload" in u for u in calls)
+
+
+def test_api_apply_failure_returns_json_error_not_opaque_500(manager: FavoriteManager, tmp_path: Path):
+    """Handled Apply failures must expose report.message (not bare Internal Server Error)."""
+
+    from http.server import ThreadingHTTPServer
+    import threading
+    import urllib.request
+
+    fav = manager.list_favorites()[0]
+    manager.add_channel(fav.id, manager.list_channels()[0].ref)
+
+    receiver = SimulatedChannelReceiver(fail_upload=True)
+    app = ChannelApp(manager, receiver, simulate=True)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/receiver/apply",
+            data=b'{"reboot": false}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            assert resp.status == 200
+            payload = json.loads(resp.read().decode())
+        assert payload.get("ok") is False
+        assert "error" in payload
+        assert "upload" in payload["error"].lower()
+        assert payload["report"]["status"] == "Failed"
+        assert "upload" in payload["report"]["message"].lower()
+    finally:
+        server.shutdown()
 
 
 def test_online_update_and_recovery(manager: FavoriteManager, tmp_path: Path):

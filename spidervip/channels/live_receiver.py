@@ -281,7 +281,8 @@ class LiveChannelReceiver:
         """Copy ``live_prog`` aside for rollback. Returns remote backup path."""
 
         assert self._telnet is not None
-        self._telnet.run(f"cp -f /data/gx/live_prog {remote_path}; sync")
+        # Local on-box cp — must not use the default 60s+ hash-style waits.
+        self._telnet.run(f"cp -f /data/gx/live_prog {remote_path}; sync", timeout=20.0)
         return remote_path
 
     def restore_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> None:
@@ -295,6 +296,9 @@ class LiveChannelReceiver:
         ``GET /web/servicelistreload?mode=0``. When ``userbouquet.*.tv`` and
         ``*.tv.simple`` are already on disk, favorites are committed too.
 
+        Tries the configured ``webif_port`` first, then the same fallbacks as
+        Frequency deploy (80, 9095). Some lab boxes only expose WebIF on 9095.
+
         Side effect: firmware also reimports ``satellites.xml`` and runs
         ``MotorSettingReinit()``, which clears dish Motor/USALS to OFF.
         Call :meth:`preserve_motor_from_backup` afterwards when a pre-reload
@@ -304,21 +308,44 @@ class LiveChannelReceiver:
         import urllib.error
         import urllib.request
 
-        url = f"http://{self.host}/web/servicelistreload?mode=0"
-        try:
-            with urllib.request.urlopen(url, timeout=20) as resp:
-                body = resp.read().decode("utf-8", "replace")
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"servicelistreload failed: {exc}") from exc
-        if "True" not in body and "reloaded" not in body.lower():
-            raise RuntimeError(f"Unexpected servicelistreload response: {body[:200]}")
-        return body
+        # Prefer configured port, then Frequency-proven WebIF ports.
+        ports: List[int] = []
+        for port in (int(self.webif_port), 80, 9095):
+            if port not in ports:
+                ports.append(port)
 
-    def preserve_motor_from_backup(self, remote_backup: str = "/data/gx/live_prog.bak_spidervip") -> int:
+        errors: List[str] = []
+        last_body = ""
+        for port in ports:
+            base = f"http://{self.host}:{port}" if port != 80 else f"http://{self.host}"
+            url = f"{base}/web/servicelistreload?mode=0"
+            try:
+                with urllib.request.urlopen(url, timeout=20) as resp:
+                    body = resp.read().decode("utf-8", "replace")
+            except urllib.error.URLError as exc:
+                errors.append(f"{url} → {exc}")
+                continue
+            last_body = body
+            if "<e2state>True</e2state>" in body or "True" in body or "reloaded" in body.lower():
+                return body
+            errors.append(f"{url} → unexpected response: {body[:120]!r}")
+
+        detail = "; ".join(errors) if errors else (last_body[:200] or "no response")
+        raise RuntimeError(f"servicelistreload failed (tried ports {ports}): {detail}")
+
+    def preserve_motor_from_backup(
+        self,
+        remote_backup: str = "/data/gx/live_prog.bak_spidervip",
+        *,
+        min_size_ratio: float = 0.95,
+    ) -> int:
         """Restore per-sat Motor/USALS windows from ``remote_backup`` into live ``live_prog``.
 
         Uploads the merge helper to the box and runs it there so large binaries
         are not transferred. Does **not** call servicelistreload again.
+
+        ``min_size_ratio``: refuse merge if live_prog shrank below this fraction of
+        the backup (Favorites default 0.95). Frequency TP trims may pass ~0.25.
         """
 
         assert self._telnet is not None
@@ -343,8 +370,10 @@ class LiveChannelReceiver:
             payload = base64.b64encode(data).decode("ascii")
             tmp_b64 = remote + ".b64"
             self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
-            for i in range(0, len(payload), 200):
-                part = payload[i : i + 200]
+            # 1800-char chunks (not 200) — tiny chunks made Frequency deploy hang
+            # for minutes uploading small helper scripts over Telnet.
+            for i in range(0, len(payload), 1800):
+                part = payload[i : i + 1800]
                 self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
             self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
 
@@ -360,14 +389,15 @@ class LiveChannelReceiver:
                 live_sz, bak_sz = int(sizes[0]), int(sizes[1])
             except ValueError:
                 live_sz = bak_sz = 0
-            if bak_sz > 0 and live_sz < int(bak_sz * 0.95):
+            ratio = float(min_size_ratio)
+            if bak_sz > 0 and live_sz < int(bak_sz * ratio):
                 raise RuntimeError(
-                    f"live_prog shrank after reload ({live_sz} < 95% of backup {bak_sz}); "
+                    f"live_prog shrank after reload ({live_sz} < {ratio:.0%} of backup {bak_sz}); "
                     "refusing motor merge to avoid further corruption"
                 )
         out = self._telnet.run(
             f"python3 /tmp/spidervip_motor_merge_run.py '{safe_bak}'; sync",
-            timeout=120.0,
+            timeout=45.0,
         )
         try:
             return int(out.strip().splitlines()[-1])
@@ -392,6 +422,7 @@ class LiveChannelReceiver:
         profile: "MotorProfile | object",
         *,
         live_prog_backup: str = "/data/gx/live_prog.bak_spidervip",
+        min_size_ratio: float = 0.95,
     ) -> Dict[str, object]:
         """Restore Motor after Favorite commit using profile capture and/or backup."""
 
@@ -409,7 +440,9 @@ class LiveChannelReceiver:
 
         # Common path: no Pull-time capture — merge sat windows from pre-apply backup.
         if not profile.has_capture:
-            restored = self.preserve_motor_from_backup(live_prog_backup)
+            restored = self.preserve_motor_from_backup(
+                live_prog_backup, min_size_ratio=min_size_ratio
+            )
             return {"method": "pre_apply_backup", "restored": restored}
 
         helper = Path(__file__).with_name("live_prog_motor.py").read_bytes()
@@ -434,8 +467,8 @@ class LiveChannelReceiver:
             payload = base64.b64encode(data).decode("ascii")
             tmp_b64 = remote + ".b64"
             self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
-            for i in range(0, len(payload), 200):
-                part = payload[i : i + 200]
+            for i in range(0, len(payload), 1800):
+                part = payload[i : i + 1800]
                 self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
             self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
 
@@ -452,14 +485,15 @@ class LiveChannelReceiver:
                 live_sz, bak_sz = int(sizes[0]), int(sizes[1])
             except ValueError:
                 live_sz = bak_sz = 0
-            if bak_sz > 0 and live_sz < int(bak_sz * 0.95):
+            ratio = float(min_size_ratio)
+            if bak_sz > 0 and live_sz < int(bak_sz * ratio):
                 raise RuntimeError(
-                    f"live_prog shrank after reload ({live_sz} < 95% of backup {bak_sz}); "
+                    f"live_prog shrank after reload ({live_sz} < {ratio:.0%} of backup {bak_sz}); "
                     "refusing motor restore"
                 )
         out = self._telnet.run(
             f"python3 /tmp/spidervip_motor_apply_run.py '{safe_bak}'; sync",
-            timeout=120.0,
+            timeout=45.0,
         )
         lines = [ln.strip() for ln in out.strip().splitlines() if ln.strip()]
         if len(lines) < 2:

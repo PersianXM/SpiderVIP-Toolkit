@@ -125,11 +125,16 @@ python tools/freeze_pull.py           # بعد از روشن شدن → build/fr
 ### چه کارهایی **مجاز / مفید** است
 
 1. forensic بگیر (`freeze_capture`) و نرخ `dwc_otg` را در `irq.txt` نگه دارید.
-2. برای نسخهٔ جدید فریمور: دوباره منوی UI و فایل `settings` را برای کلیدهای USB /
+2. **آزمون lazy-boot برای `g_service`** (پیشنهادی): نقطهٔ لود =
+   `/lib/modules/4.4.176/extra/load` از طریق `clap-loadmodules`. با
+   `python tools/g_service_bootctl.py disable` خط `insmod g_service.ko` را کامنت کن،
+   **reboot** کن، بعد ببین `g_service` لود نشده و Live TV (`u_service`/`hi_dvb`) سالم است.
+   هرگز `rmmod` نزن. برگرداندن: `g_service_bootctl.py enable`.
+3. برای نسخهٔ جدید فریمور: دوباره منوی UI و فایل `settings` را برای کلیدهای USB /
    PC-Link جستجو کنید؛ اگر گزینهٔ واقعی پیدا شد، همین بخش را به‌روز کنید.
-3. `gadgetctl` را فقط برای `status`/`up`/`guard` در نظر بگیرید؛ `down` سیاه بماند مگر
+4. `gadgetctl` را فقط برای `status`/`up`/`guard` در نظر بگیرید؛ `down` سیاه بماند مگر
    شواهد جدید خلاف آن را ثابت کند.
-4. گزینه‌های USB که **فقط میزبانِ حافظه/آپدیت** هستند (پایین) را با PC-Link اشتباه نگیرید؛
+5. گزینه‌های USB که **فقط میزبانِ حافظه/آپدیت** هستند (پایین) را با PC-Link اشتباه نگیرید؛
    خاموش/عوض کردنشان طوفان IRQ داخلی `u_service`/`hi_dvb` را قطع نمی‌کند.
 
 ### ممیزی منوی USB روی باکس آزمایش (۲۰۲۶-۰۸-۰۷) — قطعی
@@ -181,7 +186,7 @@ python tools/freeze_pull.py           # بعد از روشن شدن → build/fr
 | ابزار | نقش |
 |---|---|
 | `tools/telnet_run.py` / `telnet_probe.py` | دسترسی خام |
-| `tools/deploy_freeze_watch.py` | نصب ناظر forensic |
+| `tools/deploy_freeze_watch.py` | نصب ناظر + بازیابی خودکار روی باکس |
 | `tools/freeze_capture.py` | اسنپ‌شات فوری |
 | `tools/freeze_pull.py` | کشیدن اسنپ بعد از ریکاوری |
 | `tools/freeze_dump.sh` / `freeze_watch.sh` | منطق روی باکس (`/data/freeze_tools`) |

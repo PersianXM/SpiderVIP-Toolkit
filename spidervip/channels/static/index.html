@@ -81,20 +81,23 @@
       <section class="panel ops" id="opsPanel">
         <div class="panel-head"><h2>Operations</h2></div>
 
-        <div class="card-block">
-          <h3>Backup</h3>
-          <p class="muted">Versioned JSON with channel mapping and order.</p>
-          <div class="row">
-            <button id="btnBackup" class="ghost">Create Backup</button>
-            <a id="btnDownloadBackup" class="ghost linkbtn" href="/api/backup/download">Download</a>
-          </div>
-        </div>
+        <div class="card-block backup-ops">
+          <h3>Backup &amp; Restore</h3>
+          <p class="muted">Export workspace JSON, or import a previous backup.</p>
 
-        <div class="card-block">
-          <h3>Restore / Import</h3>
-          <input id="restoreFile" type="file" accept="application/json,.json" />
-          <div id="restorePreview" class="preview" hidden></div>
-          <button id="btnRestore" class="ghost" disabled>Restore into Workspace</button>
+          <div class="backup-export">
+            <a id="btnDownloadBackup" class="primary linkbtn" href="/api/backup/download">Download JSON</a>
+          </div>
+
+          <div class="restore-zone">
+            <span class="restore-zone-label">Import backup</span>
+            <label class="file-pick" for="restoreFile">
+              <span class="file-pick-btn ghost linkbtn" aria-hidden="true">Choose JSON…</span>
+              <input id="restoreFile" type="file" accept="application/json,.json" />
+            </label>
+            <div id="restorePreview" class="preview" hidden></div>
+            <button id="btnRestore" class="ghost" disabled>Restore into Workspace</button>
+          </div>
         </div>
 
         <div class="card-block">

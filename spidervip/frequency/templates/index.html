@@ -932,7 +932,7 @@
         </div>
         <div class="cmp-cards" id="cmpCards" aria-label="فهرست مقایسه (موبایل)"></div>
         <div class="toolbar-apply">
-          <button class="secondary" id="applyBtn" type="button" disabled>اعمال تغییرات روی ماهواره</button>
+          <button class="secondary" id="applyBtn" type="button" disabled>اعمال روی XML محلی</button>
         </div>
         <div class="status" id="applyStatus" role="status" aria-live="polite"></div>
       </div>
@@ -990,6 +990,27 @@
       return base ? base + path : path;
     };
     const apiFetch = (path, opts) => fetch(withMount(path), opts);
+
+    async function parseJsonResponse(resp) {
+      const ctype = (resp.headers.get("content-type") || "").toLowerCase();
+      const raw = await resp.text();
+      if (!ctype.includes("application/json")) {
+        const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+        throw new Error(
+          `پاسخ JSON نبود (HTTP ${resp.status}` +
+            (snippet ? `: ${snippet}` : "") +
+            "). اگر از کنسول باز کرده‌اید، صفحه را رفرش کنید تا مسیر /frequencies درست ست شود."
+        );
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+        throw new Error(
+          `پارس JSON ناموفق (HTTP ${resp.status}): ${snippet || e}`
+        );
+      }
+    }
 
     function applySharedConnection() {
       const c = window.SPIDERVIP_CONNECTION;
@@ -1107,7 +1128,7 @@
         if (creds.password) qs.set("password", creds.password);
         const q = qs.toString();
         const r = await apiFetch("/satellites" + (q ? ("?" + q) : ""));
-        const d = await r.json();
+        const d = await parseJsonResponse(r);
         if (!d.ok) {
           $("sat").innerHTML = '<option value="">خطا در بارگذاری فهرست</option>';
           revealSatSelect();
@@ -1138,17 +1159,10 @@
       ls.innerHTML = '<span class="spinner"></span> در حال واکشی اطلاعات از رسیور…';
       try {
         const resp = await apiFetch("/load_receiver", {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify(creds),
         });
-        const ctype = (resp.headers.get("content-type") || "").toLowerCase();
-        if (!ctype.includes("application/json")) {
-          const snippet = (await resp.text()).slice(0, 80);
-          throw new Error(
-            `پاسخ JSON نبود (ممکن است مسیر mount اشتباه باشد): ${snippet}`
-          );
-        }
-        const d = await resp.json();
+        const d = await parseJsonResponse(resp);
         if (!d.ok) { ls.className = "status err"; ls.textContent = (d.error || "خطا") + (d.hint ? " — " + d.hint : ""); return; }
         fillSatDropdown(d.satellites);
         $("srcPill").textContent = "منبع داده: رسیور (زنده)";
@@ -1314,10 +1328,10 @@
       try {
         const resp = await apiFetch("/scrape", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify({ url, sat_index: curSatIndex }),
         });
-        const data = await resp.json();
+        const data = await parseJsonResponse(resp);
         if (!data.ok) { status.className = "status err"; status.textContent = data.error || "خطای ناشناخته."; return; }
         status.className = "status ok";
         status.textContent = `انجام شد. ${faNum(data.count)} فرکانس از LyngSat واکشی شد.`;
@@ -1345,21 +1359,21 @@
       es.className = "status";
       if (!add.length && !remove.length) { es.className = "status err"; es.textContent = "هیچ تغییری انتخاب نشده است."; return; }
       $("applyBtn").disabled = true;
-      es.innerHTML = '<span class="spinner"></span> در حال اعمال تغییرات…';
+      es.innerHTML = '<span class="spinner"></span> در حال اعمال روی XML محلی…';
       try {
         const creds = rxCreds();
         const resp = await apiFetch("/apply", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify({ sat_index: curSatIndex, add, remove, ...creds }),
         });
-        const d = await resp.json();
+        const d = await parseJsonResponse(resp);
         if (!d.ok) { es.className = "status err"; es.textContent = d.error || "خطا."; return; }
         es.className = "status ok";
-        es.textContent = `${faNum(d.added)} افزوده و ${faNum(d.removed)} حذف شد — اکنون ${faNum(d.after)} فرکانس.`;
+        es.textContent = `${faNum(d.added)} افزوده و ${faNum(d.removed)} حذف شد در XML محلی — اکنون ${faNum(d.after)} فرکانس.`;
         if (d.live_note) es.textContent += " — " + d.live_note;
         $("doneMsg").innerHTML =
-          `تغییرات روی «${d.sat_name}» اعمال شد: ${faNum(d.added)} افزوده، ${faNum(d.removed)} حذف ` +
+          `تغییرات «${d.sat_name}» در <b>XML محلی</b> ذخیره شد (هنوز به رسیور ارسال نشده): ${faNum(d.added)} افزوده، ${faNum(d.removed)} حذف ` +
           `<span class="msg-nowrap">(مجموع ${faNum(d.after)}).</span>`;
         showDonePanel();
         setStepper(4);
@@ -1384,34 +1398,41 @@
         return;
       }
       $("sendBtn").disabled = true;
-      ss.innerHTML = '<span class="spinner"></span> در حال انتقال به رسیور…';
+      ss.innerHTML =
+        '<span class="spinner"></span> در حال ارسال به رسیور… ' +
+        "معمولاً کمتر از یک دقیقه طول می‌کشد. صفحه را نبندید.";
       $("sendLogBox").classList.add("hidden");
       $("sendLog").innerHTML = "";
       try {
         const resp = await apiFetch("/send_to_receiver", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify(creds),
         });
-        const d = await resp.json();
+        const d = await parseJsonResponse(resp);
+        const paintLog = () => {
+          (d.steps || []).forEach(line => {
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+            td.className = "log-cell";
+            td.textContent = line;
+            tr.appendChild(td);
+            $("sendLog").appendChild(tr);
+          });
+          $("sendLogBox").classList.remove("hidden");
+        };
         if (!d.ok) {
           ss.className = "status err";
           ss.textContent = (d.error || "خطا") + (d.hint ? " — " + d.hint : "");
+          if (d.snippet) ss.textContent += " [" + d.snippet + "]";
+          paintLog();
           return;
         }
         ss.className = "status ok";
         ss.textContent = fromConsole
-          ? "انتقال انجام شد."
-          : `انتقال به ${d.host} انجام شد.`;
-        (d.steps || []).forEach(line => {
-          const tr = document.createElement("tr");
-          const td = document.createElement("td");
-          td.className = "log-cell";
-          td.textContent = line;
-          tr.appendChild(td);
-          $("sendLog").appendChild(tr);
-        });
-        $("sendLogBox").classList.remove("hidden");
+          ? "انتقال انجام شد — live_prog تأیید شد."
+          : `انتقال به ${d.host} انجام شد — live_prog تأیید شد.`;
+        paintLog();
       } catch (e) {
         ss.className = "status err"; ss.textContent = "خطا در ارتباط با سرور: " + e;
       } finally {

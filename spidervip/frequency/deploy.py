@@ -356,13 +356,13 @@ def _telnet_upload_only(xml_bytes, host, user, password, remote_path=REMOTE_PATH
         text = xml_bytes.decode("utf-8")
         if make_backup:
             try:
-                existing = tn.read_file(remote_path, timeout=max(60.0, float(timeout)))
+                existing = tn.read_file(remote_path, timeout=max(30.0, float(timeout)))
                 bak_path = f"{remote_dir}/{remote_name.rsplit('.', 1)[0]}.bak"
-                tn.write_file(bak_path, existing, timeout=max(60.0, float(timeout)))
+                tn.write_file(bak_path, existing, timeout=max(30.0, float(timeout)))
                 steps.append(f"Telnet: نسخه‌ی پشتیبان ساخته شد → {bak_path}")
             except Exception as exc:  # noqa: BLE001
                 steps.append(f"Telnet: هشدار — پشتیبان‌گیری انجام نشد ({exc})")
-        tn.write_file(remote_path, text, timeout=max(120.0, float(timeout)))
+        tn.write_file(remote_path, text, timeout=max(30.0, float(timeout)))
         steps.append(
             f"Telnet: فایل جدید نوشته شد → {remote_path} ({len(xml_bytes)} بایت)"
         )
@@ -506,14 +506,36 @@ def _diff_counts(expected, actual):
 # survives a normal reboot. VERIFIED on the live device (Türksat 178 → 20 TPs
 # persisted across a full reboot).
 WEBIF_PORTS = (80, 9095)
-# mode meanings (OpenWebif): 0 = reload lamedb + services, 2 = reload bouquets.
-RELOAD_MODES = (0, 2)
+# mode meanings (OpenWebif): 0 = reload lamedb + services (commits satellites.xml
+# into live_prog). mode=2 only reloads bouquets — must NOT be treated as success
+# for frequency deploy or we report "انتقال انجام شد" while TP lists stay old.
+RELOAD_MODES = (0,)
 
 
-def webif_reload(host, timeout=15):
+def normalize_satellites_xml_bytes(xml_bytes: bytes) -> bytes:
+    """Normalize to UTF-8 LF-only XML before upload.
+
+    On Windows, ``open(..., "w")`` turns newlines into CRLF. Some box-side
+    importers then skip or partially apply the file while our post-upload
+    verify still passes (we re-read the same CRLF bytes we wrote).
+    """
+
+    if isinstance(xml_bytes, str):
+        text = xml_bytes
+    else:
+        text = bytes(xml_bytes).decode("utf-8-sig")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if not text.endswith("\n"):
+        text += "\n"
+    return text.encode("utf-8")
+
+
+def webif_reload(host, timeout=10):
     """Ask the receiver's WebIF to reload its service list from disk.
 
-    Returns (ok: bool, steps: list[str]).
+    Only ``mode=0`` counts as success (satellites.xml → live_prog). Returns
+    (ok: bool, steps: list[str]). Bound each attempt so a hung WebIF cannot
+    stall ``/send_to_receiver`` until the Console proxy dies.
     """
     steps = []
     ok = False
@@ -540,16 +562,180 @@ def webif_reload(host, timeout=15):
     return ok, steps
 
 
+def _telnet_file_fingerprint(
+    host, user, password, remote_path: str, timeout: float = 8.0
+) -> Optional[str]:
+    """Return a lightweight fingerprint of a remote file via Telnet, or None.
+
+    Uses ``stat`` size+mtime only — NEVER ``md5sum`` on ``live_prog``.
+    Full-file hashing of the multi‑MB binary on the box routinely blocked for
+    60s+ per call and made ``/send_to_receiver`` hang until the Console proxy
+    timed out. Size+mtime is enough to detect a reload rewrite.
+    """
+
+    TelnetClient, probe_tcp = _import_telnet()
+    if not probe_tcp(host, 23, timeout=min(2.0, float(timeout))):
+        return None
+    tn = TelnetClient(
+        host, port=23, username=user, password=password, timeout=float(timeout)
+    )
+    tn.connect()
+    try:
+        return _fingerprint_via_telnet(tn, remote_path, timeout=timeout)
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        try:
+            tn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _fingerprint_via_telnet(tn, remote_path: str, timeout: float = 8.0) -> Optional[str]:
+    """Cheap size+mtime fingerprint on an already-open Telnet session."""
+
+    safe = remote_path.replace("'", "'\''")
+    cmd_timeout = min(8.0, float(timeout))
+    out = tn.run(
+        f"stat -c '%s %Y' '{safe}' 2>/dev/null || "
+        f"stat -f '%z %m' '{safe}' 2>/dev/null",
+        timeout=cmd_timeout,
+    )
+    line = (out or "").strip().splitlines()[-1] if (out or "").strip() else ""
+    parts = line.split()
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].lstrip("-").isdigit():
+        return f"stat:{parts[0]}:{parts[1]}"
+
+    out = tn.run(
+        f"wc -c < '{safe}' 2>/dev/null || wc -c '{safe}' | awk '{{print $1}}'",
+        timeout=cmd_timeout,
+    )
+    size_tok = (out or "").strip().split()[0] if (out or "").strip() else ""
+    if size_tok.isdigit():
+        return "size:" + size_tok
+    return None
+
+
+# Back-compat alias used by older call sites / tests.
+def _telnet_md5(host, user, password, remote_path: str, timeout: float = 8.0) -> Optional[str]:
+    """Deprecated: full-file md5 was too slow on live_prog. Returns size token if any."""
+    fp = _telnet_file_fingerprint(host, user, password, remote_path, timeout=timeout)
+    if fp and fp.startswith("stat:"):
+        return fp.split(":")[1]  # size only
+    if fp and fp.startswith("size:"):
+        return fp[5:]
+    return None
+
+
+def confirm_live_prog_commit(
+    host,
+    user,
+    password,
+    *,
+    backup_path: Optional[str] = None,
+    pre_fingerprint: Optional[str] = None,
+    timeout: float = 8.0,
+    polls: int = 3,
+    delay: float = 1.0,
+) -> Tuple[bool, List[str]]:
+    """Prove ``servicelistreload`` rewrote the binary master ``live_prog``.
+
+    Checking only ``satellites.xml`` is a false-positive trap: after upload the
+    file already matches our payload even when the box never committed it into
+    ``live_prog`` (UI TP list stays at the old count, e.g. Turksat 166).
+
+    Compares a **pre-reload** size+mtime fingerprint to a post-reload one with a
+    short bounded poll (defaults: 3×1s) on **one** Telnet session. Does not hash
+    the whole binary and does not wait for the Console proxy to time out.
+    """
+
+    steps: List[str] = []
+    pre = (pre_fingerprint or "").strip() or None
+
+    TelnetClient, probe_tcp = _import_telnet()
+    if not probe_tcp(host, 23, timeout=min(2.0, float(timeout))):
+        steps.append(
+            "تأیید live_prog ✗: Telnet در دسترس نیست — اثرانگشت live_prog گرفته نشد."
+        )
+        return False, steps
+
+    tn = TelnetClient(
+        host, port=23, username=user, password=password, timeout=float(timeout)
+    )
+    try:
+        tn.connect()
+    except Exception as exc:  # noqa: BLE001
+        steps.append(f"تأیید live_prog ✗: اتصال Telnet ناموفق ({exc}).")
+        return False, steps
+
+    try:
+        if not pre and backup_path:
+            bak_fp = _fingerprint_via_telnet(tn, backup_path, timeout=timeout)
+            live_fp = _fingerprint_via_telnet(tn, "/data/gx/live_prog", timeout=timeout)
+            if not live_fp or not bak_fp:
+                steps.append(
+                    "تأیید live_prog ✗: خواندن اثرانگشت سریع از Telnet ممکن نشد."
+                )
+                return False, steps
+            live_size = live_fp.split(":")[1] if ":" in live_fp else live_fp
+            bak_size = bak_fp.split(":")[1] if ":" in bak_fp else bak_fp
+            if live_size != bak_size:
+                steps.append(
+                    f"تأیید live_prog ✓: اندازه نسبت به پشتیبان عوض شد "
+                    f"({bak_size} → {live_size})."
+                )
+                return True, steps
+            steps.append(
+                "تأیید live_prog ✗: اندازه live_prog با پشتیبان یکی است — "
+                "کامیت باینری اثبات نشد."
+            )
+            return False, steps
+
+        if not pre:
+            steps.append(
+                "تأیید live_prog ✗: اثرانگشت قبل از بازخوانی ثبت نشد — "
+                "نمی‌توان کامیت باینری را اثبات کرد (Telnet برای backup لازم است)."
+            )
+            return False, steps
+
+        post = None
+        for attempt in range(1, max(1, int(polls)) + 1):
+            if attempt > 1:
+                time.sleep(max(0.0, float(delay)))
+            post = _fingerprint_via_telnet(tn, "/data/gx/live_prog", timeout=timeout)
+            if post and post != pre:
+                steps.append(
+                    f"تأیید live_prog ✓: فایل باینری نسبت به قبل از بازخوانی تغییر کرد "
+                    f"({pre} → {post})."
+                )
+                return True, steps
+            steps.append(
+                f"تأیید live_prog: تلاش {attempt}/{polls} — هنوز تغییر نکرده "
+                f"(قبل={pre} / بعد={post or '—'})."
+            )
+
+        steps.append(
+            "تأیید live_prog ✗: پس از بازخوانی، size/mtime با قبل یکی ماند — "
+            "یعنی TPها در master نوشته نشدند. لیست آنتن/ماهواره/TP روی جعبه "
+            "همان مقادیر قبلی می‌ماند."
+        )
+        return False, steps
+    finally:
+        try:
+            tn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
 # --------------------------------------------------------------------------- #
 # Post-reload verification + automatic debug routine
 # --------------------------------------------------------------------------- #
 def confirm_reload(expected_bytes, host, user, password,
-                   remote_path=LIVE_DB_PATH, retries=4, delay=2.0):
+                   remote_path=LIVE_DB_PATH, retries=3, delay=1.0):
     """Re-read satellites.xml AFTER the reload and confirm the transponder count
-    matches what we uploaded — the definitive proof the change actually took.
+    matches what we uploaded. Necessary but not sufficient — also see
+    ``confirm_live_prog_commit`` (XML on disk can match even when live_prog did not).
 
-    The reload is not instantaneous, so we poll a few times. Returns
-    (ok: bool, steps: list[str], actual_counts: dict|None).
+    Short bounded poll (default 3×1s) — do not stall the Console proxy.
     """
     steps = []
     try:
@@ -559,7 +745,11 @@ def confirm_reload(expected_bytes, host, user, password,
 
     actual = None
     for attempt in range(1, retries + 1):
-        time.sleep(delay)
+        if attempt > 1:
+            time.sleep(delay)
+        else:
+            # Tiny settle after WebIF before first read.
+            time.sleep(min(0.5, float(delay)))
         try:
             remote = ftp_download(host, user, password, remote_path)
             actual = count_transponders(remote)
@@ -765,6 +955,7 @@ def restore_motor_after_reload(
     live_prog_backup: Optional[str],
     workspace: Optional[os.PathLike] = None,
     timeout: float = 15.0,
+    min_size_ratio: float = 0.95,
 ) -> List[str]:
     """Restore Motor/USALS into live_prog after successful reload.
 
@@ -804,6 +995,7 @@ def restore_motor_after_reload(
                 result = rx.apply_motor_profile(
                     profile,
                     live_prog_backup=live_prog_backup or LIVE_PROG_BAK_PATH,
+                    min_size_ratio=min_size_ratio,
                 )
                 steps.append(
                     f"motor_restore: method={result.get('method')} "
@@ -816,7 +1008,9 @@ def restore_motor_after_reload(
 
         if live_prog_backup:
             try:
-                restored = rx.preserve_motor_from_backup(live_prog_backup)
+                restored = rx.preserve_motor_from_backup(
+                    live_prog_backup, min_size_ratio=min_size_ratio
+                )
                 steps.append(
                     f"motor_restore: method=pre_reload_backup windows={restored}"
                 )
@@ -846,16 +1040,18 @@ def send_to_receiver(xml_bytes, host=DEFAULT_HOST, user=DEFAULT_USER,
         1. Back up live_prog (Motor/USALS) before reload when Telnet is up.
         2. Back up + upload satellites.xml over the LIVE database
            (/data/gx/local/enigma_db/satellites.xml) via FTP or Telnet.
-        3. Call WebIF /web/servicelistreload so the middleware commits XML
+        3. Call WebIF /web/servicelistreload?mode=0 so middleware commits XML
            into live_prog (same path as on-screen save).
-        4. Restore Motor/USALS from motor_profile.json and/or the pre-reload
+        4. Confirm satellites.xml TP counts *and* that live_prog changed vs
+           the pre-reload backup (XML-only check is a false positive).
+        5. Restore Motor/USALS from motor_profile.json and/or the pre-reload
            live_prog backup — without calling servicelistreload again.
 
-    The change is then persistent across reboots. VERIFIED on the live box.
-    Returns a list of human-readable step strings.
+    Returns ``{"ok", "steps", "reload_ok", "confirm_ok", "live_prog_ok"}``.
     """
     steps: List[str] = []
     live_prog_bak: Optional[str] = None
+    xml_bytes = normalize_satellites_xml_bytes(xml_bytes)
 
     # 0) Pre-reload live_prog backup so Motor can be restored after wipe.
     if do_reload:
@@ -865,24 +1061,46 @@ def send_to_receiver(xml_bytes, host=DEFAULT_HOST, user=DEFAULT_USER,
 
     # 1)+2) Back up and upload straight onto the live DB.
     steps.append("upload: بارگذاری satellites.xml…")
-    steps += ftp_upload(xml_bytes, host, user, password, LIVE_DB_PATH,
-                        make_backup=True)
+    uploaded = upload_receiver_db(
+        xml_bytes, host, user, password, remote_path=LIVE_DB_PATH, make_backup=True
+    )
+    steps += uploaded["steps"]
+    transport = uploaded.get("transport") or ""
 
     # Prove the uploaded bytes match what we sent.
     _, vstep = verify_upload(xml_bytes, host, user, password, LIVE_DB_PATH)
     steps.append(vstep)
 
-    # Also mirror to the _bak copy the app keeps (best effort, harmless).
-    try:
-        ftp_upload(xml_bytes, host, user, password, LIVE_DB_BAK_PATH,
-                   make_backup=False)
-        steps.append("نسخه‌ی enigma_db_bak نیز هم‌گام شد.")
-    except Exception:  # noqa: BLE001
-        pass
+    # Mirror to enigma_db_bak only when FTP is available — a second full Telnet
+    # base64 transfer can double deploy time and trip the Console proxy.
+    if transport == "ftp":
+        try:
+            ftp_upload(xml_bytes, host, user, password, LIVE_DB_BAK_PATH,
+                       make_backup=False)
+            steps.append("نسخه‌ی enigma_db_bak نیز هم‌گام شد.")
+        except Exception:  # noqa: BLE001
+            pass
+    else:
+        steps.append(
+            "نسخه‌ی enigma_db_bak رد شد (انتقال اصلی Telnet بود — جلوگیری از آپلود دوم)."
+        )
 
-    # 3) Tell the app to reload from disk and commit to its binary store.
     reload_ok = False
+    ok_confirm = False
+    ok_live = False
     if do_reload:
+        # Snapshot live_prog BEFORE WebIF rewrite (cheap stat — not md5).
+        pre_live_fp = _telnet_file_fingerprint(
+            host, user, password, "/data/gx/live_prog", timeout=8.0
+        )
+        if pre_live_fp:
+            steps.append(f"fingerprint: قبل از بازخوانی live_prog = {pre_live_fp}")
+        else:
+            steps.append(
+                "fingerprint: هشدار — اثرانگشت قبل از بازخوانی گرفته نشد؛ "
+                "تأیید live_prog ممکن است رد شود."
+            )
+
         steps.append(
             "reload: درخواست بازخوانی به رسیور ارسال می‌شود تا تغییر — دقیقاً مثل "
             "ویرایش و ذخیره از منوی خود دستگاه — در حافظه‌ی دائمی ثبت شود "
@@ -892,38 +1110,84 @@ def send_to_receiver(xml_bytes, host=DEFAULT_HOST, user=DEFAULT_USER,
         reload_ok, rsteps = webif_reload(host)
         steps += rsteps
 
-        # 4) DEFINITIVE proof: re-read satellites.xml and compare transponder
-        #    counts. On mismatch, kick off the automatic debug routine so the
-        #    user sees exactly where it broke.
+        # 4a) satellites.xml TP counts (necessary but not sufficient).
         ok_confirm, csteps, actual = confirm_reload(
             xml_bytes, host, user, password)
         steps += csteps
+        debugged = False
         if not ok_confirm:
             steps.append("⚠ مغایرت پس از بازخوانی تشخیص داده شد — دیباگ خودکار آغاز شد:")
             steps += debug_mismatch(xml_bytes, host, user, password,
                                     actual_counts=actual)
+            debugged = True
 
-        # 5) Motor restore LAST — never call servicelistreload afterwards.
-        # Even if confirm failed, reload already ran MotorSettingReinit.
-        if reload_ok or live_prog_bak:
+        # 4b) live_prog must actually change — fail fast (bounded poll).
+        ok_live, lsteps = confirm_live_prog_commit(
+            host,
+            user,
+            password,
+            backup_path=live_prog_bak,
+            pre_fingerprint=pre_live_fp,
+            timeout=8.0,
+            polls=3,
+            delay=1.0,
+        )
+        steps += lsteps
+        if not ok_live and ok_confirm and not debugged:
+            steps.append(
+                "⚠ شمارش XML با انتظار یکی است ولی live_prog عوض نشده — "
+                "این همان حالتی است که جعبه هنوز مثلاً ۱۶۶ TP نشان می‌دهد."
+            )
+            steps += debug_mismatch(xml_bytes, host, user, password,
+                                    actual_counts=actual)
+        elif not ok_live and ok_confirm:
+            steps.append(
+                "⚠ شمارش XML با انتظار یکی است ولی live_prog عوض نشده — "
+                "این همان حالتی است که جعبه هنوز مثلاً ۱۶۶ TP نشان می‌دهد."
+            )
+
+        # 5) Motor restore only if WebIF reload ran (MotorSettingReinit).
+        # Skipping when reload failed avoids a long Telnet helper upload for nothing.
+        if reload_ok:
             steps += restore_motor_after_reload(
                 host,
                 user,
                 password,
                 live_prog_backup=live_prog_bak,
                 workspace=workspace,
+                min_size_ratio=0.25,
             )
         else:
             steps.append(
-                "motor_restore: رد شد — بازخوانی موفق نبود و پشتیبان live_prog نیست."
+                "motor_restore: رد شد — بازخوانی WebIF موفق نبود؛ Motor دست‌نخورده است."
             )
 
-        if reload_ok and ok_confirm:
+        ok = bool(reload_ok and ok_confirm and ok_live)
+        if ok:
             steps.append("done: انتقال و بازیابی Motor تمام شد.")
+        elif reload_ok and ok_confirm and not ok_live:
+            steps.append(
+                "fail: بازخوانی WebIF پاسخ داد ولی live_prog کامیت نشد — "
+                "لیست TP رسیور تغییر نکرده است."
+            )
         elif reload_ok:
             steps.append(
-                "done: بازخوانی انجام شد؛ تأیید شمارش مغایر بود — لاگ دیباگ را ببینید."
+                "fail: بازخوانی انجام شد؛ تأیید شمارش/live_prog مغایر بود — لاگ را ببینید."
             )
         else:
             steps.append("fail: بازخوانی WebIF موفق نبود — Motor ممکن است دست‌نخورده باشد.")
-    return steps
+        return {
+            "ok": ok,
+            "steps": steps,
+            "reload_ok": reload_ok,
+            "confirm_ok": ok_confirm,
+            "live_prog_ok": ok_live,
+        }
+
+    return {
+        "ok": True,
+        "steps": steps,
+        "reload_ok": False,
+        "confirm_ok": False,
+        "live_prog_ok": False,
+    }

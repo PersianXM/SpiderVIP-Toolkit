@@ -365,58 +365,96 @@ input:focus, select:focus {
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  height: 28px;
+  gap: 6px;
+  height: 30px;
   flex-shrink: 0;
   align-self: center;
 }
+/* Circular icon actions — solid accent fill + white glyph (ref: orange chip) */
 button.fav-act {
   appearance: none;
+  -webkit-appearance: none;
   box-sizing: border-box;
-  border: var(--sv-border-thin);
-  background: var(--sv-beige);
-  color: var(--muted);
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  border: 2px solid var(--sv-ink);
+  background: var(--sv-orange);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 0;
   font-size: 0;
   vertical-align: middle;
   cursor: pointer;
-  flex: 0 0 28px;
-  transition: background .15s ease, color .15s ease;
-  box-shadow: none;
+  flex: 0 0 30px;
+  overflow: hidden;
+  /* Soft cream halo around the hard ink ring */
+  box-shadow: 0 0 0 2px rgba(255, 254, 249, 0.95);
+  transition:
+    background .15s var(--sv-ease),
+    filter .15s var(--sv-ease),
+    transform .12s var(--sv-ease),
+    box-shadow .12s var(--sv-ease);
   transform: none;
 }
-button.fav-act:hover { transform: none; box-shadow: none; }
+button.fav-act.top,
+button.fav-act.bottom {
+  background: var(--sv-orange);
+  color: #fff;
+}
+button.fav-act.remove {
+  background: var(--sv-danger);
+  color: #fff;
+}
+button.fav-act:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 0 0 2px rgba(255, 254, 249, 0.95),
+    2px 2px 0 var(--sv-ink);
+}
+button.fav-act:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.96);
+  box-shadow: 0 0 0 2px rgba(255, 254, 249, 0.95);
+}
+button.fav-act:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(255, 254, 249, 0.95),
+    var(--sv-focus);
+}
 button.fav-act svg {
   display: block;
   width: 14px;
   height: 14px;
   margin: 0;
+  padding: 0;
+  flex: none;
+  overflow: visible;
   pointer-events: none;
 }
-button.fav-act.top:hover:not(:disabled) {
-  background: var(--sv-lime);
-  color: var(--sv-ink);
-}
+button.fav-act.top:hover:not(:disabled),
 button.fav-act.bottom:hover:not(:disabled) {
-  background: var(--sv-sky);
-  color: var(--sv-ink);
+  background: var(--sv-orange);
+  color: #fff;
 }
 button.fav-act.remove:hover:not(:disabled) {
-  background: #ffe4e8;
-  color: var(--danger);
+  background: var(--sv-danger);
+  color: #fff;
 }
 button.fav-act:disabled {
   opacity: 0.32;
   cursor: default;
+  filter: none;
+  transform: none;
+  box-shadow: 0 0 0 2px rgba(255, 254, 249, 0.95);
 }
 .icon-btn {
   border: var(--sv-border-thin);
@@ -435,13 +473,83 @@ button.fav-act:disabled {
 }
 .ops .card-block:first-of-type { border-top: 0; }
 .ops h3 { margin: 0 0 6px; font-size: 0.95rem; font-weight: 700; }
+
+/* Backup & Restore — single purpose: export JSON / import backup */
+.backup-ops .muted { margin: 0 0 12px; line-height: 1.35; }
+.backup-export {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.backup-export .linkbtn.primary {
+  background: var(--sv-orange);
+  color: #fff;
+  box-shadow: var(--sv-shadow-hard-sm);
+}
+.backup-export .linkbtn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--sv-shadow-hard);
+}
+.restore-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 2px dashed rgba(17, 20, 38, 0.35);
+  border-radius: var(--sv-radius-md);
+  background: var(--sv-beige);
+}
+.restore-zone-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sv-muted);
+}
+.ops label.file-pick {
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.ops label.file-pick input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+}
+.file-pick-btn {
+  pointer-events: none;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+.restore-zone .preview {
+  margin: 0;
+  background: var(--sv-white);
+}
+.restore-zone #btnRestore {
+  align-self: flex-start;
+}
 .motor-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin: 8px 0;
 }
-.motor-grid label, .ops label {
+.motor-grid label, .ops label:not(.file-pick) {
   display: flex;
   flex-direction: column;
   gap: 4px;

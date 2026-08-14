@@ -118,3 +118,13 @@ def test_console_shared_connection_api(tmp_path: Path):
     )
     assert probe.status_code == 200
     assert "probe" in probe.get_json()
+
+
+def test_channels_apply_proxy_timeout_is_long():
+    """Favorite Apply with reboot must not die at the default 90s POST timeout."""
+
+    from spidervip.console.server import _proxy_timeout_for
+
+    assert _proxy_timeout_for("/channels", "api/receiver/apply", "POST") >= 600.0
+    assert _proxy_timeout_for("/channels", "api/receiver/pull", "POST") == 90.0
+    assert _proxy_timeout_for("/frequencies", "send_to_receiver", "POST") == 120.0

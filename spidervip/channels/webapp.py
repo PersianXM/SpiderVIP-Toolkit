@@ -406,9 +406,21 @@ def make_handler(app: ChannelApp):
                         return self._json(409, {"error": "Another sensitive operation is running."})
                     try:
                         report = app.pipeline.apply(reboot=bool(data.get("reboot", True)))
-                        app.last_apply = report.to_dict()
-                        code = 200 if report.status.value == "Completed" else 500
-                        return self._json(code, {"report": report.to_dict()})
+                        payload = report.to_dict()
+                        app.last_apply = payload
+                        # Always return JSON with report (+ error on failure).
+                        # Handled pipeline failures use HTTP 200 so the UI can
+                        # show report.message instead of opaque "Internal Server Error".
+                        if report.status.value == "Completed":
+                            return self._json(200, {"ok": True, "report": payload})
+                        return self._json(
+                            200,
+                            {
+                                "ok": False,
+                                "error": report.message or "Apply failed",
+                                "report": payload,
+                            },
+                        )
                     except ApplyBusyError as exc:
                         return self._json(409, {"error": str(exc)})
                     finally:

@@ -48,6 +48,68 @@ def _no_cache_html(response):
     return response
 
 
+def _wants_json():
+    """True for API/XHR calls that must never receive an HTML error page."""
+    path = (request.path or "").rstrip("/")
+    if path in ("", "/") or path.endswith(".html"):
+        return False
+    # Explicit HTML download endpoints stay text.
+    if path in ("/download_xml", "/download"):
+        return False
+    accept = (request.accept_mimetypes.best or "") if request.accept_mimetypes else ""
+    if "application/json" in (request.headers.get("Accept") or ""):
+        return True
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        return True
+    if "json" in accept.lower():
+        return True
+    # Frequency UI always fetches these as JSON.
+    return path.lstrip("/").split("/", 1)[0] in {
+        "satellites",
+        "load_receiver",
+        "scrape",
+        "apply",
+        "send_to_receiver",
+    }
+
+
+def _json_error(message, status=500, **extra):
+    payload = {"ok": False, "error": str(message)}
+    payload.update(extra)
+    return jsonify(payload), status
+
+
+@app.errorhandler(404)
+def _json_404(err):
+    if _wants_json():
+        return _json_error(
+            f"مسیر پیدا نشد: {request.path}",
+            404,
+            hint="اگر از کنسول باز کرده‌اید، درخواست باید زیر /frequencies/ برود.",
+        )
+    return err.get_response()
+
+
+@app.errorhandler(405)
+def _json_405(err):
+    if _wants_json():
+        return _json_error(
+            f"متد {request.method} برای {request.path} مجاز نیست.",
+            405,
+        )
+    return err.get_response()
+
+
+@app.errorhandler(500)
+def _json_500(err):
+    if _wants_json():
+        return _json_error(
+            getattr(err, "description", None) or str(err) or "خطای داخلی سرور",
+            500,
+        )
+    return err.get_response() if hasattr(err, "get_response") else err
+
+
 def _db_path():
     """Active receiver database: a live copy if one was pulled, else bundled."""
     path = session.get("receiver_db_path", "")
@@ -322,8 +384,10 @@ def apply_route():
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_name = f"receiver_data_{stamp}.xml"
     out_path = os.path.join(OUTPUT_DIR, out_name)
-    with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(result["xml"])
+    # Binary + LF-only: Windows text mode would write CRLF and break box import.
+    xml_out = deploy.normalize_satellites_xml_bytes(result["xml"].encode("utf-8"))
+    with open(out_path, "wb") as fh:
+        fh.write(xml_out)
 
     session["last_xml_path"] = out_path
 
@@ -353,43 +417,79 @@ def send_to_receiver_route():
     Expected JSON (all optional except that an export must have run first):
         { "host": "192.168.100.102", "user": "root", "password": "root",
           "workspace": optional channels workspace path }
+
+    Always returns ``application/json`` (including 4xx/5xx) so the Console
+    UI never hits ``JSON.parse`` on an HTML error page.
     """
-
-    data = request.get_json(silent=True) or {}
-    host = (data.get("host") or deploy.DEFAULT_HOST).strip()
-    user = (data.get("user") or deploy.DEFAULT_USER).strip()
-    password = data.get("password")
-    if password is None or password == "":
-        password = deploy.DEFAULT_PASS
-    workspace = (data.get("workspace") or "").strip() or None
-
-    path = session.get("last_xml_path", "")
-    if not path or not os.path.exists(path):
-        return jsonify({
-            "ok": False,
-            "error": "ابتدا باید فرکانس‌ها را کپی/خروجی بگیرید (مرحله ۶).",
-        }), 400
-
-    with open(path, "rb") as fh:
-        xml_bytes = fh.read()
-
+    host = deploy.DEFAULT_HOST
     try:
-        steps = deploy.send_to_receiver(
-            xml_bytes,
-            host=host,
-            user=user,
-            password=password,
-            workspace=workspace,
-        )
-    except Exception as exc:  # noqa: BLE001
+        data = request.get_json(silent=True) or {}
+        host = (data.get("host") or deploy.DEFAULT_HOST).strip()
+        user = (data.get("user") or deploy.DEFAULT_USER).strip()
+        password = data.get("password")
+        if password is None or password == "":
+            password = deploy.DEFAULT_PASS
+        workspace = (data.get("workspace") or "").strip() or None
+
+        path = session.get("last_xml_path", "")
+        if not path or not os.path.exists(path):
+            return jsonify({
+                "ok": False,
+                "error": "ابتدا باید تغییرات را با «اعمال تغییرات روی ماهواره» بسازید.",
+                "hint": "دکمهٔ انتقال فقط فایل خروجیِ همان مرحله را به رسیور می‌فرستد.",
+                "host": host,
+            }), 400
+
+        with open(path, "rb") as fh:
+            xml_bytes = fh.read()
+
+        try:
+            result = deploy.send_to_receiver(
+                xml_bytes,
+                host=host,
+                user=user,
+                password=password,
+                workspace=workspace,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({
+                "ok": False,
+                "error": f"انتقال به رسیور ناموفق بود: {exc}",
+                "hint": _creds_hint(host),
+                "host": host,
+                "steps": [],
+            }), 502
+
+        # Do not report success when live_prog never changed (Turksat-166 trap).
+        ok = bool(result.get("ok")) if isinstance(result, dict) else True
+        steps = result.get("steps", result) if isinstance(result, dict) else result
+        if not isinstance(steps, list):
+            steps = [str(steps)]
+        else:
+            steps = [str(s) for s in steps]
+        payload = {
+            "ok": ok,
+            "host": host,
+            "steps": steps,
+            "reload_ok": result.get("reload_ok") if isinstance(result, dict) else None,
+            "confirm_ok": result.get("confirm_ok") if isinstance(result, dict) else None,
+            "live_prog_ok": result.get("live_prog_ok") if isinstance(result, dict) else None,
+        }
+        if not ok:
+            payload["error"] = (
+                "انتقال کامل نشد — live_prog/تأیید ناموفق. جزئیات در لاگ مراحل."
+            )
+            payload["hint"] = _creds_hint(host)
+            return jsonify(payload), 502
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001 — never fall through to HTML 500
         return jsonify({
             "ok": False,
             "error": f"انتقال به رسیور ناموفق بود: {exc}",
             "hint": _creds_hint(host),
             "host": host,
+            "steps": [],
         }), 502
-
-    return jsonify({"ok": True, "host": host, "steps": steps})
 
 
 @app.route("/download_xml")

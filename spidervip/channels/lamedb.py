@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from .model import Channel, FavoriteList
@@ -9,6 +10,9 @@ from .model import Channel, FavoriteList
 # service_type codes commonly seen in Enigma2 lamedb
 _TV_TYPES = {1, 17, 22, 25}
 _RADIO_TYPES = {2, 10}
+
+# Flags / provider line: ``p:Provider,c:CAID,...`` (sometimes written with no name line).
+_FLAGS_LINE_RE = re.compile(r"^(?:p:|c:|C:)", re.ASCII)
 
 
 def _format_orbital_position(pos_raw: int) -> str:
@@ -31,6 +35,65 @@ def _hex_field(value: str) -> str:
         return format(int(text, 16), "X")
     except ValueError:
         return text.upper().lstrip("0") or "0"
+
+
+def _is_service_key_line(line: str) -> bool:
+    """True for ``sid:namespace:tsid:onid:stype:...`` service records."""
+
+    parts = (line or "").strip().lower().split(":")
+    if len(parts) < 5:
+        return False
+
+    def _parse(stype_base: int) -> bool:
+        int(parts[0], 16)
+        int(parts[1], 16)
+        int(parts[2], 16)
+        int(parts[3], 16)
+        int(parts[4], stype_base)
+        return True
+
+    try:
+        return _parse(10)
+    except ValueError:
+        try:
+            return _parse(16)
+        except ValueError:
+            return False
+
+
+def _is_flags_line(line: str) -> bool:
+    """True for lamedb data lines like ``p:NoName,c:0007d8,c:011fff,c:03``."""
+
+    text = (line or "").strip()
+    if not text or not _FLAGS_LINE_RE.match(text):
+        return False
+    # Real channel names almost never look like ``p:...,c:...``.
+    if "," in text:
+        return True
+    # Bare ``p:Provider`` / ``p:NoName`` still counts as flags when no commas.
+    return text.lower().startswith("p:")
+
+
+def _provider_from_meta(meta: str) -> str:
+    if not meta:
+        return ""
+    for part in meta.split(","):
+        part = part.strip()
+        if part.lower().startswith("p:"):
+            return part[2:].strip()
+    return ""
+
+
+def _display_name(name: str, provider: str, sid: str) -> str:
+    """Pick a UI name when lamedb left the name empty or wrote flags into it."""
+
+    cleaned = (name or "").strip()
+    if cleaned and not _is_flags_line(cleaned):
+        return cleaned
+    prov = (provider or "").strip()
+    if prov and prov.lower() not in {"noname", "unknown", "none"}:
+        return prov
+    return f"Service {_hex_field(sid)}"
 
 
 def service_ref(
@@ -188,13 +251,37 @@ def parse_lamedb(text: str) -> List[Channel]:
             continue
 
         if section == "services" and line and not line.startswith("#"):
+            # Some receivers omit the empty name line when SDT name is missing:
+            #   KEY
+            #   p:NoName,c:...
+            # Treating that flags line as the name shifts every following record.
+            if not _is_service_key_line(line):
+                i += 1
+                continue
+
             key_line = line.lower()
             i += 1
-            name = lines[i].strip() if i < len(lines) else ""
+            name_raw = lines[i] if i < len(lines) else ""
+            name = name_raw.strip()
             i += 1
-            meta = lines[i].strip() if i < len(lines) else ""
+
+            if _is_flags_line(name):
+                meta = name
+                name = ""
+            elif _is_service_key_line(name):
+                # Name and flags both missing — next line is the following service.
+                meta = ""
+                name = ""
+                i -= 1
+            else:
+                meta = lines[i].strip() if i < len(lines) else ""
+                i += 1
+                if _is_service_key_line(meta):
+                    # Flags line omitted; do not swallow the next service key.
+                    i -= 1
+                    meta = ""
+
             services.append((key_line, name, meta, key_line))
-            i += 1
             continue
 
         i += 1
@@ -236,15 +323,11 @@ def parse_lamedb(text: str) -> List[Channel]:
                     break
         tp = tp or {}
 
-        provider = ""
-        if meta:
-            for part in meta.split(","):
-                if part.startswith("p:"):
-                    provider = part[2:]
-                    break
+        provider = _provider_from_meta(meta)
+        display = _display_name(name, provider, sid)
 
         is_hd = (
-            "hd" in name.lower()
+            "hd" in display.lower()
             or "hd" in provider.lower()
             or service_type_code in {17, 22, 25}
         )
@@ -258,7 +341,7 @@ def parse_lamedb(text: str) -> List[Channel]:
         channels.append(
             Channel(
                 ref=ref,
-                name=name or f"Service {sid}",
+                name=display,
                 number=channel_number or (len(channels) + 1),
                 satellite=tp.get("satellite", "Unknown"),
                 orbital_position=tp.get("orbital_position", ""),

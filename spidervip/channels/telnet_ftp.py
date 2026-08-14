@@ -100,12 +100,14 @@ class TelnetClient:
                 pass
         return encoded
 
-    def write_file(self, remote_path: str, content: str, timeout: float = 120.0) -> None:
+    def write_file(self, remote_path: str, content: str, timeout: float = 30.0) -> None:
         """Write a remote text file via base64 over Telnet (no FTP required)."""
 
         payload = base64.b64encode(content.encode("utf-8")).decode("ascii")
-        # Chunk to keep command lines reasonable for limited shells.
-        chunk_size = 200
+        # Larger chunks = far fewer Telnet round-trips. satellites.xml is often
+        # hundreds of KB; 200-byte chunks made Frequency deploy take >5–15 min.
+        # BusyBox ash typically accepts ~2–4KB command lines; stay under that.
+        chunk_size = 1800
         chunks = [payload[i : i + chunk_size] for i in range(0, len(payload), chunk_size)] or [""]
         tmp = f"{remote_path}.spidervip.tmp"
         self.run(f'rm -f "{tmp}" "{tmp}.b64"', timeout=timeout)

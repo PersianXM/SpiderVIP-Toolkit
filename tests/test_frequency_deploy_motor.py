@@ -123,9 +123,17 @@ def test_send_to_receiver_motor_restore_order(monkeypatch):
         "debug_mismatch",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("no debug on success")),
     )
+    monkeypatch.setattr(
+        deploy,
+        "confirm_live_prog_commit",
+        lambda *a, **k: (True, ["تأیید live_prog ✓"]),
+    )
 
     xml = b'<?xml version="1.0"?><satellites></satellites>'
-    steps = deploy.send_to_receiver(xml, host="10.0.0.1", user="root", password="root")
+    result = deploy.send_to_receiver(xml, host="10.0.0.1", user="root", password="root")
+    assert isinstance(result, dict)
+    assert result["ok"] is True
+    steps = result["steps"]
 
     # live DB upload + optional enigma_db_bak mirror both call ftp_upload.
     assert events[0] == "upload"
@@ -199,6 +207,61 @@ def test_restore_motor_falls_back_to_backup(monkeypatch):
         live_prog_backup="/data/gx/live_prog.bak_spidervip_freq",
     )
     fake_rx.preserve_motor_from_backup.assert_called_once_with(
-        "/data/gx/live_prog.bak_spidervip_freq"
+        "/data/gx/live_prog.bak_spidervip_freq", min_size_ratio=0.95
     )
     assert any("method=pre_reload_backup windows=4" in s for s in steps)
+
+def test_normalize_satellites_xml_bytes_strips_crlf():
+    from spidervip.frequency import deploy
+
+    raw = b"<?xml version=\"1.0\"?>\r\n<satellites>\r\n</satellites>\r\n"
+    out = deploy.normalize_satellites_xml_bytes(raw)
+    assert b"\r" not in out
+    assert out.endswith(b"</satellites>\n")
+
+
+def test_webif_reload_only_mode_zero():
+    from spidervip.frequency import deploy
+
+    assert deploy.RELOAD_MODES == (0,)
+
+
+def test_send_to_receiver_fails_when_live_prog_unchanged(monkeypatch):
+    """XML count match alone must not report success (Turksat-166 false positive)."""
+
+    from spidervip.frequency import deploy
+
+    monkeypatch.setattr(
+        deploy,
+        "backup_live_prog_for_motor",
+        lambda *a, **k: ("/data/gx/live_prog.bak_spidervip_freq", ["backup: ok"]),
+    )
+    monkeypatch.setattr(deploy, "ftp_upload", lambda *a, **k: ["FTP: uploaded"])
+    monkeypatch.setattr(deploy, "verify_upload", lambda *a, **k: (True, "تأیید ✓"))
+    monkeypatch.setattr(deploy, "webif_reload", lambda *a, **k: (True, ["WebIF ✓"]))
+    monkeypatch.setattr(
+        deploy,
+        "confirm_reload",
+        lambda *a, **k: (True, ["تأیید نهایی ✓"], {"total": 1, "per_sat": {}}),
+    )
+    monkeypatch.setattr(
+        deploy,
+        "confirm_live_prog_commit",
+        lambda *a, **k: (False, ["تأیید live_prog ✗: unchanged"]),
+    )
+    monkeypatch.setattr(deploy, "debug_mismatch", lambda *a, **k: ["debug"])
+    monkeypatch.setattr(
+        deploy, "restore_motor_after_reload", lambda *a, **k: ["motor_restore: skip"]
+    )
+
+    result = deploy.send_to_receiver(
+        b"<?xml version=\"1.0\"?><satellites></satellites>",
+        host="10.0.0.1",
+        user="root",
+        password="root",
+    )
+    assert result["ok"] is False
+    assert result["confirm_ok"] is True
+    assert result["live_prog_ok"] is False
+    assert any("live_prog کامیت نشد" in s or s.startswith("fail:") for s in result["steps"])
+
