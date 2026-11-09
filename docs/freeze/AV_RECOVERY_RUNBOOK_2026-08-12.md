@@ -1,5 +1,7 @@
 # راهنمای بازیابی فریز صوت/تصویر — شاهد زنده ۲۰۲۶-۰۸-۱۲
 
+> **اصلاحیه 2026-11:** روش دستی `reboot -f` این سند هنوز درست است. بخش‌های بازیابی خودکار (`freeze_watch`، `av_recovery`، غیرفعال‌کردن `g_service`) منسوخ‌اند. علت مستقیم و نگهبان جدید: [`AUDIO_FREEZE_2026-11.md`](AUDIO_FREEZE_2026-11.md).
+
 **خلاصه (EN):** Validated remote recovery for “menu/zap OK, all channels no A/V” on Spider VIP
 (`Hi3798MV300`, Telnet `root@192.168.100.102`). Root cause was a wedged HiSilicon MSP play path
 (`avplay=STOP`, no `vdec00`), not a full kernel hang. **`/sbin/reboot -f`** plus patched

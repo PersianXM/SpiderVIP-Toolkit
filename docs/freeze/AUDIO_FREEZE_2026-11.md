@@ -1,0 +1,86 @@
+# فریز صدا/تصویر — یافته‌های نوامبر ۲۰۲۶ و نگهبان خودکار
+
+**خلاصه (EN):** On 2026-11-02 and 2026-11-09 the "menu/zap OK, no A/V on any channel" freeze was captured live on the box. Both times the player thread was stuck in an ioctl on `/dev/hi_ao` (`AO_IOCTL_TrackGetDelayMs`), waiting on the AO driver's global lock `g_AoMutex`. Audio DMA (`aiao` IRQ) had stopped, the demux audio channel was 99% full, demux RAM port 128 was 97–98% full and `call HI_DVB_DMX_GetTSBuffer failed` repeated every 5 s. USB/`g_service` is a victim, not the cause. The AO driver `hi_aiao.ko` is byte-identical from v1.00.76 to v1.00.95, so no vendor update fixes it. Mitigation: an on-box watchdog (`tools/audio_watch.sh`) that reboots only when all three signs agree, installed with one click (`PATCH_RECEIVER.bat`).
+
+این سند جای نتیجه‌گیری‌های قبلی درباره «g_service بیکار / loopback داخلی» را می‌گیرد. هر جا با سندهای قدیمی‌تر تناقض دارد، این سند معتبر است.
+
+## دستگاه و نسخه
+
+- Hi3798MV300، کرنل 4.4.176، hostname `clap4k`، فریم‌ور نصب‌شده v1.00.93 (2026-07-24).
+- فایل‌های فریم‌ور محلی: `F:\Satelite\Spider VIP\*.mupg` (v1.00.76، .89، .91، .92، .93، .95).
+
+## زنجیره فریز (شاهد قطعی، دو بار)
+
+1. پخش‌کننده (`bianbiang`) هنگام پرسیدن تأخیر صدا (`ioctl` روی `/dev/hi_ao`، cmd `0xc008114c` = `AO_IOCTL_TrackGetDelayMs`) در `down_interruptible` گیر می‌کند. هر فرمان AO در ورودی `AO_DRV_Ioctl` قفل سراسری `g_AoMutex` را می‌گیرد.
+2. DMA صدا می‌ایستد: شمارنده IRQ `aiao` ثابت می‌ماند. پورت‌های خروجی در `sound0` هنوز «start» نشان می‌دهند.
+3. تغذیه صدا قطع می‌شود و کانال صدای demux ۹۹٪ پر می‌شود. بقیه کانال‌ها ۰٪ هستند.
+4. demux برای جلوگیری از گم‌شدن داده، کل ورودی را متوقف می‌کند: RAM port 128 بین ۹۷ تا ۹۸٪ پر می‌شود، IRQهای `dmx`/`vdec`/`aiao` صفر می‌شوند و `call HI_DVB_DMX_GetTSBuffer failed` هر ۵ ثانیه در لاگ می‌آید.
+5. خواندن `/proc/msp/avplay00` خطای `Resource temporarily unavailable` می‌دهد. عوض‌کردن کانال اثری ندارد و فقط ریبوت (`reboot -f`) رسیور را آزاد می‌کند.
+
+زمان شروع فریز از روی PCR در `sync00` و `DmaCnt` در `sound0` (هر واحد حدود ۱۰.۶۷ میلی‌ثانیه) محاسبه شد. هر دو بار وسط تماشای پیوسته یک کانال با صدای mp2 بود: یک بار بعد از حدود ۱۰۵ دقیقه (11-02) و یک بار بعد از حدود ۷۱ دقیقه (11-09).
+
+**نامعلوم:** چه چیزی `g_AoMutex` را نگه می‌دارد. در هیچ‌کدام از دو فریز رشته دیگری داخل AO یا در حالت اجرا دیده نشد.
+
+## آنچه کنار رفت
+
+| فرضیه | شاهد رد |
+|---|---|
+| USB / `g_service` | تیونر و TS از راه `gservice_*` و RAM port 128 می‌آیند. USB پشت demux گیر می‌کند و علت نیست. |
+| نشتی حافظه | RSS برنامه `bianbiang` حدود ۳۱ مگابایت و MemAvailable حدود ۶۰۰ مگابایت. |
+| گرما | ۱۰.۶ ساعت روی ۸۳ تا ۸۵°C بدون فریز. در فریزها ۷۲ تا ۷۹°C بود. |
+| قطع‌ووصل HDMI | در فریز 11-09 هیچ HPD/UnHPD بعد از بوت ثبت نشد. |
+| عوض‌کردن سریع کانال | تست عمدی 11-04 با ۱۰۹ دکمه و ۸۸ zap فریز نساخت. |
+| آپدیت کارخانه | `hi_aiao.ko`، `hi_adsp.ko`، `hi_adec.ko`، `hi_demux.ko`، کرنل و `libhi_msp.so` در v1.00.76 تا v1.00.95 یکسان‌اند (md5). |
+
+## نوع دوم فریز (جدا، علت نامعلوم)
+
+در 2026-11-04 ساعت 21:46:13 (uptime حدود 8843 ثانیه) کل رسیور قفل شد: ping جواب نمی‌داد، روی صفحه آخرین فریم مانده بود و فقط قطع برق آن را برگرداند. تا ۳ ثانیه قبل همه‌چیز سالم بود. لاگ: `build/blackbox/blackbox_20261104_211634.log`. نگهبان این نوع را پوشش نمی‌دهد.
+
+## نگهبان خودکار (`tools/audio_watch.sh`)
+
+فقط وقتی هر سه نشانه با هم دیده شوند ریبوت می‌کند:
+- شمارنده `aiao` حداقل ۶۰ ثانیه ثابت مانده باشد،
+- dmesg شامل `GetTSBuffer failed` باشد،
+- RAM port 128 حداقل ۹۰٪ پر باشد.
+
+منو، عوض‌کردن کانال و آماده‌به‌کار DMA صدا را هم می‌ایستانند، اما port را پر نمی‌کنند. برای همین باعث ریبوت نمی‌شوند.
+
+محافظ‌ها:
+- **بعد از بوت:** در ۶۰۰ ثانیه اول هیچ کاری نمی‌کند.
+- **جلوگیری از چرخه ریبوت:** بعد از ۳ ریبوت پشت‌سرهم فقط لاگ می‌نویسد، مگر اینکه یک دوره ۲ ساعته کار سالم شمارنده را صفر کند.
+- **خاموش‌کردن دستی:** با فایل `/data/audio_watch/disable` غیرفعال می‌شود.
+- **یک نسخه در هر بوت:** با `boot_id` بررسی می‌شود.
+
+قبل از هر ریبوت، وضعیت لحظه فریز در `/data/audio_watch/event_*.txt` ذخیره می‌شود (۵ تای آخر) و لاگ در `/data/audio_watch/log` است. به درایورها، تنظیمات و `g_service` دست نمی‌زند.
+
+اجرا در بوت: خط آن در `/home/gx/local/user_script` اضافه می‌شود. این فایل را `bianbiang.sh` خود فریم‌ور هر بار در بوت اجرا می‌کند و فایل‌های فریم‌ور تغییر نمی‌کنند.
+
+وضعیت تأییدشده: 2026-11-09 روی رسیور واقعی نصب شد و بعد از قطع برق در ثانیه ۶ بوت خودکار راه افتاد. هنوز در یک فریز واقعی دیده نشده است. احتمالاً بعد از تنظیمات کارخانه یا نصب فریم‌ور پاک می‌شود (تست نشده).
+
+### نصب یک‌کلیکی (در ریشه مخزن)
+
+| فایل | کار |
+|---|---|
+| `PATCH_RECEIVER.bat` | نصب یا نصب دوباره (تکرار بی‌خطر است). بعد از هر ریست کارخانه یا آپدیت دوباره بزنید. |
+| `CHECK_RECEIVER.bat` | وضعیت: `running=<pid>`، `hook_lines`، `auto_reboots_saved`، آخرین لاگ |
+| `UNPATCH_RECEIVER.bat` | حذف کامل نگهبان و خط بوت |
+
+`tools/deploy_audio_watch.py install|remove|status` رسیور را با بنر Telnet `clap4k` پیدا می‌کند: اول IPهای شناخته‌شده، بعد اسکن /24. کپی فایل را با md5 بررسی می‌کند.
+
+## ابزارهای فقط‌خواندنی
+
+| ابزار | کاربرد | خروجی |
+|---|---|---|
+| `tools/blackbox_record.py` | ضبط مداوم از PC. هر ۳ ثانیه `ai=` و USB/TS را ثبت می‌کند، هر ۳۰ ثانیه پخش و demux و صدا و HDMI را. هشدارهای `PC ALERT` دارد. | `build/blackbox/` |
+| `tools/freeze_state.py` | عکس در لحظه فریز: رشته‌ها، IRQها، `/proc/msp/*`، `syscall` رشته‌های گیرکرده و fd آن‌ها | `build/freeze_state/` |
+
+شواهد کلیدی:
+- `build/freeze_state/freeze_state_20261102_180906.txt` و دو عکس بعدی همان روز
+- `build/freeze_state/freeze_state_20261109_212630.txt` (ioctl و `/dev/hi_ao`)
+- ضبط سالم ۱۰.۶ ساعته: `build/blackbox/blackbox_20261101_131841.log`
+
+## ممنوع
+
+- `rmmod g_service` یا غیرفعال‌کردن `g_service` (`tools/g_service_bootctl.py`): کرنل هنگ می‌کند و مسیر تیونر/TS قطع می‌شود.
+- ابزارهای بازیابی قدیمی (`deploy_freeze_watch.py`، `av_recovery_run.py`، `freeze_lib.sh`) بر پایه فرضیه‌های ردشده ساخته شده‌اند. به‌جای آن‌ها از نگهبان بالا استفاده کنید.
+- خاموش‌کردن رسیور بعد از فریز پیش از گرفتن عکس با `freeze_state.py`.

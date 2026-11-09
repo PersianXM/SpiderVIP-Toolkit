@@ -74,16 +74,19 @@ python app.py
 
 ### فریز A/V (CLI / forensic)
 
-```powershell
-pip install -e ".[online,dev]"   # SSH اختیاری برای برخی مسیرها
-spidervip diagnose --simulate --fault player-crash
-python tools/freeze_capture.py   # وقتی فریز دیدید؛ قبل از قطع برق
-python tools/freeze_pull.py
-python tools/deploy_freeze_watch.py  # بازیابی خودکار روی خود رسیور (بدون PC)
-python tools/av_recovery_run.py  # playbook از PC (reboot -f + deploy + zap)
-```
+علت مستقیم فریز «منو کار می‌کند، تصویر و صدا روی همه کانال‌ها نیست» در نوامبر ۲۰۲۶ پیدا شد: قفل درایور خروجی صدا (`hi_aiao.ko`). راه‌حل فعلی نگهبان خودکار روی رسیور است که فریز را تشخیص می‌دهد و رسیور را ریبوت می‌کند.
 
-راهنما: [بازیابی A/V ۲۰۲۶-۰۸-۱۲](docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md) · [عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) · [EN](docs/troubleshooting-en.md)
+| کار | روش |
+|---|---|
+| نصب نگهبان (بعد از هر ریست کارخانه یا آپدیت دوباره) | دابل‌کلیک `PATCH_RECEIVER.bat` |
+| بررسی وضعیت نگهبان | دابل‌کلیک `CHECK_RECEIVER.bat` |
+| حذف نگهبان | دابل‌کلیک `UNPATCH_RECEIVER.bat` |
+| ضبط مداوم (فقط‌خواندنی) | `python tools/blackbox_record.py` |
+| عکس در لحظه فریز، قبل از خاموش‌کردن | `python tools/freeze_state.py` |
+
+راهنما: **[فریز صدا/تصویر — نوامبر ۲۰۲۶](docs/freeze/AUDIO_FREEZE_2026-11.md)** · [بازیابی دستی ۲۰۲۶-۰۸-۱۲](docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md) · [عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) · [EN](docs/troubleshooting-en.md)
+
+> ابزارهای قدیمی `deploy_freeze_watch.py`، `av_recovery_run.py` و `g_service_bootctl.py` بر پایه فرضیه‌های ردشده ساخته شده‌اند. از آن‌ها استفاده نکنید.
 
 ## پیش‌نیازها
 
@@ -104,6 +107,7 @@ python tools/av_recovery_run.py  # playbook از PC (reboot -f + deploy + zap)
 | [`docs/channels/README.md`](docs/channels/README.md) | کانال و Favorite |
 | [`docs/frequency/README.md`](docs/frequency/README.md) | مدیریت فرکانس |
 | [`docs/freeze/README.md`](docs/freeze/README.md) | فریز و forensic |
+| [`docs/freeze/AUDIO_FREEZE_2026-11.md`](docs/freeze/AUDIO_FREEZE_2026-11.md) | علت مستقیم فریز و نگهبان خودکار |
 | [`docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) | پورت پچ به فریمور جدید |
 | [`docs/NETWORK_ACCESS_GUIDE.md`](docs/NETWORK_ACCESS_GUIDE.md) | دسترسی شبکه |
 | [`docs/ARCHIVE_SIBLINGS.md`](docs/ARCHIVE_SIBLINGS.md) | پوشه‌های آرشیوشدهٔ هم‌جوار |
