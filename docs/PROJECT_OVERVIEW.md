@@ -116,8 +116,6 @@ patchهای متناظر:
 
 - `patches/usr/bin/bianbiang.sh`
 - `patches/etc/sysctl.conf`
-- `patches/usr/bin/gadgetctl.sh`
-- `patches/usr/local/gadgetd/gadget_fsm.py`
 - `patches/usr/local/dbgbar/`
 
 نتیجهٔ استقرار مستقیم در 2026-07-10:
@@ -174,9 +172,9 @@ patchهای متناظر:
 - `build_custom_mupg.py`, `verify_custom.py`
 - `probe_checksum*.py`, `crack_checksum.py`
 - `telnet_probe.py`, `telnet_run.py` و ابزارهای deployment
-- `freeze_capture.py`, `freeze_pull.py`, `deploy_freeze_watch.py` (forensic فریز روی `/data`)
+- `freeze_state.py` (عکس لحظه فریز)، `blackbox_record.py` (ضبط مداوم)، `deploy_audio_watch.py` + `audio_watch.sh` (نگهبان فریز روی رسیور)
 - scraper و generator داده‌های transponder
-- تست‌های `test_lyngsat_parse.py` و `test_gadget_fsm.py`
+- تست `test_lyngsat_parse.py`
 
 برخی ابزارها محصول تحقیق تعاملی‌اند و ممکن است نام فایل، IP یا مسیر پیش‌فرض
 داشته باشند. اجرای آن‌ها باید پس از بازبینی ورودی‌ها انجام شود.
@@ -214,7 +212,6 @@ python -m pip install requests beautifulsoup4
 
 ```powershell
 python tools/test_lyngsat_parse.py
-python tools/test_gadget_fsm.py
 ```
 
 workflow تحلیل offline، پس از قراردادن قانونی image در workspace محلی:
@@ -260,16 +257,11 @@ runtime و anti-brick را تضمین نمی‌کند.
 | `STABILITY_AUDIT.md` | یافته‌ها و اولویت‌های پایداری |
 | `DEPLOYMENT_RESULT.md` | تغییرات و تأیید پس از reboot |
 | `NETWORK_ACCESS_GUIDE.md` | Telnet زنده، IP/پورت‌ها، ابزارهای `telnet_*.py` |
-| `FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md` | پورت پچ/forensic به فریمور جدید؛ درس‌های فریز و P10 |
-| `troubleshooting-fa.md` / `troubleshooting-en.md` | فریز A/V، جدول P1–P14، forensic قبل از قطع برق |
+| `FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md` | کار بعد از ارتقای فریمور یا ریست کارخانه |
+| `troubleshooting-fa.md` / `troubleshooting-en.md` | فریز A/V، جدول علت‌ها، بازیابی |
+| `freeze/AUDIO_FREEZE_2026-11.md` | علت تأییدشده فریز (قفل درایور صدا) و نگهبان خودکار |
 | `SCAN_ARCHITECTURE_REPORT.md` | جریان کامل scan و database |
 | `TRANSPONDER_PERSISTENCE_ROOTCAUSE.md` | persistence و WebIF |
-| `GADGET_SERVICE_ROOTCAUSE.md` | علت ریشه‌ای سرویس USB gadget |
-| `GADGET_LIFECYCLE_DESIGN.md` | طراحی lifecycle |
-| `LAZY_GADGET_DESIGN.md` | طراحی lazy activation |
-| `FREEZE_INCIDENT_2026-07-11.md` | رخداد freeze |
-| `FREEZE_INCIDENT_GADGET_TEST_2026-07-11.md` | آزمون تکمیلی gadget |
-| `EXECUTION_TRACE_IRQ_TO_LOG.md` | trace از IRQ تا log |
 | `AV_PIPELINE_MAP.md` | pipeline صوت و تصویر |
 | `DEBUG_STATUS_BAR.md` | معماری و deployment نوار debug |
 

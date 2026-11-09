@@ -86,7 +86,7 @@ python app.py
 
 راهنما: **[فریز صدا/تصویر — نوامبر ۲۰۲۶](docs/freeze/AUDIO_FREEZE_2026-11.md)** · [بازیابی دستی ۲۰۲۶-۰۸-۱۲](docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md) · [عیب‌یابی فریز (FA)](docs/troubleshooting-fa.md) · [EN](docs/troubleshooting-en.md)
 
-> ابزارهای قدیمی `deploy_freeze_watch.py`، `av_recovery_run.py` و `g_service_bootctl.py` بر پایه فرضیه‌های ردشده ساخته شده‌اند. از آن‌ها استفاده نکنید.
+> سندها و ابزارهای قدیمی که بر پایه فرضیه‌های ردشده (USB gadget، طوفان IRQ) بودند حذف شده‌اند. در تاریخچه گیت باقی‌اند.
 
 ## پیش‌نیازها
 

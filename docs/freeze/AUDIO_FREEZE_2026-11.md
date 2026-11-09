@@ -2,7 +2,7 @@
 
 **خلاصه (EN):** On 2026-11-02 and 2026-11-09 the "menu/zap OK, no A/V on any channel" freeze was captured live on the box. Both times the player thread was stuck in an ioctl on `/dev/hi_ao` (`AO_IOCTL_TrackGetDelayMs`), waiting on the AO driver's global lock `g_AoMutex`. Audio DMA (`aiao` IRQ) had stopped, the demux audio channel was 99% full, demux RAM port 128 was 97–98% full and `call HI_DVB_DMX_GetTSBuffer failed` repeated every 5 s. USB/`g_service` is a victim, not the cause. The AO driver `hi_aiao.ko` is byte-identical from v1.00.76 to v1.00.95, so no vendor update fixes it. Mitigation: an on-box watchdog (`tools/audio_watch.sh`) that reboots only when all three signs agree, installed with one click (`PATCH_RECEIVER.bat`).
 
-این سند جای نتیجه‌گیری‌های قبلی درباره «g_service بیکار / loopback داخلی» را می‌گیرد. هر جا با سندهای قدیمی‌تر تناقض دارد، این سند معتبر است.
+سندهای قدیمی مبتنی بر فرضیه «g_service بیکار / loopback داخلی / طوفان IRQ» حذف شده‌اند و در تاریخچه گیت باقی‌اند.
 
 ## دستگاه و نسخه
 
@@ -81,6 +81,5 @@
 
 ## ممنوع
 
-- `rmmod g_service` یا غیرفعال‌کردن `g_service` (`tools/g_service_bootctl.py`): کرنل هنگ می‌کند و مسیر تیونر/TS قطع می‌شود.
-- ابزارهای بازیابی قدیمی (`deploy_freeze_watch.py`، `av_recovery_run.py`، `freeze_lib.sh`) بر پایه فرضیه‌های ردشده ساخته شده‌اند. به‌جای آن‌ها از نگهبان بالا استفاده کنید.
+- `rmmod g_service` یا غیرفعال‌کردن `g_service`: کرنل هنگ می‌کند و مسیر تیونر/TS قطع می‌شود.
 - خاموش‌کردن رسیور بعد از فریز پیش از گرفتن عکس با `freeze_state.py`.

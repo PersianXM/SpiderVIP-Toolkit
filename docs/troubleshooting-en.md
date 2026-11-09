@@ -43,7 +43,6 @@ P7+ if needed.
 | **P7** | No respawn for `bianbiang` | ISSUE-001: `inittab once` + no loop → any crash = permanent black screen | Supervised loop in `bianbiang.sh` (v1.00.93) | Yes (deploy patch) |
 | **P8** | Helper services die without restart | ISSUE-002: `streamrelay` / `satipclient` / `app_console` | Light supervision in `bianbiang.sh` | Yes (deploy patch) |
 | **P9** | OOM / memory pressure on long uptime | ISSUE-003: low `min_free`, high dirty → OOM-kill of the app | Safer sysctl + zram if needed | Yes (deploy patch) |
-| **P10** | USB gadget / `u_service`+`dwc_otg` IRQ storm | Freeze 2026-07-11 and forensics 2026-08-07: load≈14, idle CPU. This firmware has **no** PC-Link / USB-TS menu; USB settings are only host record/backup/update | Capture forensics; never `rmmod g_service`; structural gadget work only (not a menu toggle) | No (no menu) |
 | **P11** | HiSilicon chain stall (VDEC/VPSS/win/sync) | Counters frozen; `sync=STOP`; missing `vdec`/`win` nodes | A/V restart; soft reboot if stuck | Yes |
 | **P12** | TS transport errors or unlocked frontend | Demux up but stream empty/corrupt | Physical signal + demux reset | Mixed |
 | **P13** | Corrupt channel DB (`live_prog` / bad PIDs) | After incomplete scan or `satellites.xml` mismatch | Repair DB; commit via WebIF | Manual |
@@ -52,88 +51,13 @@ P7+ if needed.
 `spidervip` auto-handles P1–P6 today. P7–P11 come from this repo's stability
 audit and live forensics.
 
-### Lab observation (2026-08-07)
+## Confirmed cause and recovery (November 2026)
 
-| Stage | State |
-| --- | --- |
-| `bianbiang` | Running |
-| HDMI / OSD | Connected, active |
-| `avplay00` | **STOP** — video and audio disabled |
-| Video decoder | No `vdec00` node |
-| Audio | Mute off but `SendCnt=0` |
-| Closest label | **P1** (play path stopped); also check **P10** if USB load stays high |
+The "menu works, no picture or sound on any channel" freeze was captured live twice (2026-11-02 and 2026-11-09). Both times the cause was a stuck lock in the audio output driver (`hi_aiao.ko`): audio stops, the demux audio channel fills, and the demux then stops reading its input. USB/`g_service` is a victim in this chain, not the cause. Details: [`freeze/AUDIO_FREEZE_2026-11.md`](freeze/AUDIO_FREEZE_2026-11.md).
 
-## Recommended fix for the current lab fault
-
-Low risk → higher risk; **no full flash**:
-
-1. **Confirm on the TV:** stay on a satellite channel (not only the menu); zap once.
-   If `avplay` leaves STOP after a zap, it was transient.
-2. **Soft-restart playback (P1):** over Telnet stop `bianbiang` once so
-   `bianbiang.sh` respawns it; after 30–60s re-read `/proc/msp/avplay00` —
-   `CurStatus` should not be STOP and the video PID should not be `0x1fff`.
-3. **Still STOP — demux/PIDs (P2):** reset demux and zap the same channel again.
-4. **Video plane / unmute (P3)**, then safe HDMI modes (P4) if needed.
-5. **USB gadget (P10):** this image has no PC-Link menu. If load stays ~14 with a
-   `dwc_otg` / `service gadget` storm, capture forensics only — toggling host
-   USB record/backup/update settings will not clear that load. See
-   [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md).
-6. **Signal / CAS (P5/P6):** only after `avplay` is RUN again but A/V is still dead.
-7. **Last soft step:** remote `reboot`. A full `.mupg` flash is not required unless
-   a known-bad patch is installed.
-
-Sample commands for step 2 (from repo root, only after you approve):
-
-```powershell
-# example cmds.txt — run only after approval
-# killall bianbiang
-# sleep 3
-# pidof bianbiang
-# cat /proc/msp/avplay00 | head -40
-```
-
-## Before power-cut — mandatory forensics
-
-A hard power-cut resets SoC/MMZ and often clears the symptom, but it also
-**wipes the runtime evidence**. Do not pull power until a durable snapshot exists
-under `/data`.
-
-### One-time watcher deploy
-
-```powershell
-python tools/deploy_freeze_watch.py
-```
-
-Installs under `/data/freeze_tools/` and hooks `/home/gx/local/user_script` (already
-called from `bianbiang.sh`) so the watcher returns after boot. When the freeze
-signature holds (~120s of `avplay=STOP` / null PID / MSP read timeout, with
-`bianbiang` alive), it writes a time-bounded snapshot and — with `AUTO_RECOVERY=1` —
-backs up `live_prog` and runs `/sbin/reboot -f`. Max 2 recoveries per 24h; skipped
-during the first 3 minutes after boot. Disable with
-`touch /data/freeze_tools/DISABLE_AUTO_RECOVERY`.
-
-### When you see a freeze right now
-
-```powershell
-python tools/freeze_capture.py
-```
-
-Wait for `DUMP_OK` and `SUMMARY.txt`. **Only then** is a power-cut allowed.
-
-### After the box is back
-
-```powershell
-python tools/freeze_pull.py          # latest snap → build/freeze_snap/
-python tools/freeze_pull.py --list
-```
-
-Each snapshot includes `avplay`/`sync`/`irq`/`ps`/`dmesg`/`db_stat`/`SUMMARY.txt`
-with tags such as `AV_STOP`, `NO_VDEC`, `USB_IRQ_STORM_SUSPECT`, `DB_DISK_OK`.
-
-To re-apply patches after a vendor firmware upgrade, and for P10 limits (no Telnet
-PC-Link key; never `rmmod g_service`):
-
-- [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)
+- **Automatic recovery:** install the on-box watchdog by double-clicking `PATCH_RECEIVER.bat`; `CHECK_RECEIVER.bat` shows its status.
+- **Manual recovery:** [`freeze/AV_RECOVERY_RUNBOOK-en.md`](freeze/AV_RECOVERY_RUNBOOK-en.md) (`/sbin/reboot -f`).
+- **Before cutting power:** if the box is still on the network, run `python tools/freeze_state.py` to save a read-only snapshot in `build/freeze_state/`.
 
 ## Repair over the online connection
 

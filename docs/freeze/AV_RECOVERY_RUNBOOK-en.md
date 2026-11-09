@@ -1,40 +1,26 @@
-# A/V freeze recovery runbook — live validation 2026-08-12
+# A/V freeze — manual recovery
 
-See the full Persian runbook (primary): [`AV_RECOVERY_RUNBOOK_2026-08-12.md`](AV_RECOVERY_RUNBOOK_2026-08-12.md).
+Cause and automatic recovery: [`AUDIO_FREEZE_2026-11.md`](AUDIO_FREEZE_2026-11.md). Use this page only when the watchdog is not installed.
 
-## Quick recovery (validated)
+## Symptom
 
-Symptoms: menu and zapping work; all channels have no picture/sound; Telnet alive.
+- Menu, remote and zapping work; no picture or sound on any channel.
+- Telnet answers, so the kernel is alive.
+- `cat /proc/msp/avplay00` returns `Resource temporarily unavailable`.
+- `dmesg` repeats `call HI_DVB_DMX_GetTSBuffer failed` every 5 s.
 
-1. Light probe: `avplay=STOP` or no `/proc/msp/vdec00` while `bianbiang` runs.
-2. Optional: `python tools/freeze_capture.py` (may hang if MSP wedged).
-3. `cp /data/gx/live_prog /data/live_prog_usals_ok.bak && sync`
-4. Deploy patches once: `python tools/av_recovery_run.py --deploy-only`
-5. **`/sbin/reboot -f`** (plain `reboot` from Telnet did not reboot this box).
-6. Wait ~90s; zap test channel; wait 50s for USALS motor.
-7. Confirm: `CurStatus:PLAY`, `vdec00` exists, VPSS ~50Hz.
+## Steps
 
-Test channel **Iran International HD** (Badr 26.0E):
+1. Take a read-only snapshot first: `python tools/freeze_state.py`
+2. Hard reboot over Telnet: `/sbin/reboot -f`. If Telnet does not answer, cut the power.
+3. Wait about 2 minutes for the picture.
 
-```
-1:0:2:82:2:1:1042FE9:0:0:0:
-```
+## Did not work (2026-08-12)
 
-Automated: `python tools/av_recovery_run.py`
+- `killall bianbiang`: the player is stuck inside the kernel audio driver's lock.
+- A soft `sync; reboot`.
+- Changing channels.
 
-## Do we have a repeatable fix?
+## Never
 
-**Yes** for MSP play-path wedge (P1/P11) with live Telnet.
-
-**No** single fix for: full kernel hang, weak signal, scrambled services, or `rmmod g_service`.
-
-## Patch status
-
-- **On-box auto-recovery (default on):** `python tools/deploy_freeze_watch.py`
-  - `HOLD_SEC=120`, `BOOT_GRACE_SEC=180`, max 2 reboots / 24h
-  - timed `/proc/msp` reads so dump/watch cannot hang
-  - `av_recovery.sh` → backup `live_prog` → `/sbin/reboot -f`
-  - `motor_boot_restore.sh` only if `live_prog` is missing/empty
-- **Shipped in repo:** `patches/usr/bin/bianbiang.sh`, `patches/etc/sysctl.conf`
-- **Deferred:** dbgbar OSD
-- Disable: `touch /data/freeze_tools/DISABLE_AUTO_RECOVERY` or `--no-auto-recovery`
+- `rmmod g_service` or disabling `g_service`: it hangs the kernel and cuts the tuner/TS path.

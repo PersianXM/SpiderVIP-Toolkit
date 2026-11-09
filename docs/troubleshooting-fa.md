@@ -1,7 +1,5 @@
 # رفع مشکل فریز/نبود تصویر و صدا در رسیور SpiderVIP
 
-> **اصلاحیه 2026-11:** شواهد زنده نوامبر ۲۰۲۶ نشان داد `g_service` بیکار و loopback داخلی نیست. تیونر، DiSEqC، کارت هوشمند و جریان TS از همین مسیر USB به یک تراشه جدا می‌روند و TS روی RAM port 128 وارد demux می‌شود. علت مستقیم فریز در درایور صدا (`hi_aiao.ko`) است. نتیجه‌گیری‌های این سند درباره علت فریز معتبر نیستند؛ ببینید [`freeze/AUDIO_FREEZE_2026-11.md`](freeze/AUDIO_FREEZE_2026-11.md).
-
 این سند برای عیب‌یابی و رفع مشکلِ «نبودِ تصویر و صدا» (فریز تصویر و صدا) در رسیورهای
 ماهواره‌ای خانواده‌ی SpiderVIP نوشته شده است؛ در شرایطی که بقیه‌ی بخش‌های دستگاه سالم
 کار می‌کنند.
@@ -45,7 +43,6 @@
 | **P7** | نبود respawn برای `bianbiang` | ISSUE-001: `inittab once` + نبود حلقه → هر crash = سیاه دائمی تا قطع برق | پچ `bianbiang.sh` با حلقهٔ نظارت (نسخهٔ ۱.۰۰.۹۳) | بله (استقرار پچ) |
 | **P8** | مرگ سرویس‌های کمکی بدون restart | ISSUE-002: `streamrelay` / `satipclient` / `app_console` | supervision سبک در `bianbiang.sh` | بله (استقرار پچ) |
 | **P9** | OOM / فشار حافظه در uptime طولانی | ISSUE-003: min_free پایین، dirty بالا؛ مسیر به OOM-kill اپ | sysctl محافظه‌کارتر + zram در صورت نیاز | بله (استقرار پچ) |
-| **P10** | طوفان وقفهٔ USB gadget / مسیر `u_service`+`dwc_otg` | freeze ۲۰۲۶-۰۷-۱۱ و forensic ۲۰۲۶-۰۸-۰۷: load≈۱۴، CPU بیکار. روی این فریمور منوی PC-Link/استریم TS **وجود ندارد**؛ USB منو فقط ضبط/بکاپ/آپدیت میزبان است | forensic بگیر؛ `rmmod g_service` ممنوع؛ کاهش ساختاری فقط با کار مهندسی gadget (نه تیک منو) | خیر (منو ندارد) |
 | **P11** | بن‌بست زنجیرهٔ HiSilicon (VDEC/VPSS/win/sync) | شمارنده‌ها جلو نمی‌روند؛ `sync=STOP`؛ نودهای `vdec`/`win` غایب | ری‌استارت A/V؛ در حالت شدید reboot نرم | بله |
 | **P12** | خطای حمل TS در demux (TEI/CC) یا frontend بدون lock | demux فعال ولی جریان خراب/خالی | سیگنال فیزیکی + در صورت نیاز ریست demux | ترکیبی |
 | **P13** | پایگاه کانال خراب (`live_prog` / PID اشتباه) | بعد از اسکن ناقص یا ناهماهنگی با `satellites.xml` | اصلاح/بازسازی دیتابیس؛ commit از WebIF | دستی |
@@ -54,95 +51,13 @@
 ابزار `spidervip` فعلاً P1–P6 را به‌صورت خودکار تشخیص/اعمال می‌کند. P7–P11 از
 ممیزی پایداری و forensic زندهٔ همین مخزن آمده‌اند.
 
-### وضعیت مشاهده‌شده روی باکس آزمایش (۲۰۲۶-۰۸-۰۷)
+## علت تأییدشده و بازیابی (نوامبر ۲۰۲۶)
 
-| بخش | وضعیت |
-| --- | --- |
-| `bianbiang` | در حال اجرا |
-| HDMI / OSD | وصل و فعال |
-| `avplay00` | **STOP** — ویدیو و صدا Disable |
-| دیکودر ویدیو | نود `vdec00` ساخته نشده |
-| صدا | Mute off ولی `SendCnt=0` |
-| نزدیک‌ترین برچسب | **P1** (مسیر پخش متوقف)؛ در صورت بار USB همزمان **P10** را هم چک کنید |
+فریز «منو کار می‌کند، تصویر و صدا روی همه کانال‌ها نیست» دو بار روی دستگاه زنده ثبت شد (2026-11-02 و 2026-11-09). هر دو بار علت قفل درایور خروجی صدا (`hi_aiao.ko`) بود: صدا می‌ایستد، کانال صدای demux پر می‌شود و demux کل ورودی را می‌بندد. USB/`g_service` در این زنجیره قربانی است، نه علت. جزئیات: [`freeze/AUDIO_FREEZE_2026-11.md`](freeze/AUDIO_FREEZE_2026-11.md).
 
-## پیشنهاد رفع برای مشکل فعلی (باکس آزمایش)
-
-ترتیب پیشنهادی — از کم‌ریسک به پرریسک؛ **بدون فلش کامل**:
-
-1. **تأیید علائم روی TV:** روی یک کانال ماهواره‌ای (نه فقط منو) باشید؛ زپینگ را یک‌بار
-   امتحان کنید. اگر بعد از زپینگ `avplay` از STOP خارج شد، مشکل لحظه‌ای بوده است.
-2. **ری‌استارت نرم پخش (P1):** با Telnet یک بار `bianbiang` را ببندید تا حلقهٔ
-   `bianbiang.sh` دوباره بالا بیاورد؛ بعد از ۳۰–۶۰ ثانیه دوباره
-   `cat /proc/msp/avplay00` را بخوانید — باید `CurStatus` دیگر STOP نباشد و PID ویدیو
-   غیر از `0x1fff` شود.
-3. **اگر هنوز STOP بود — demux/PID (P2):** ریست demux و زپینگ دوباره به همان کانال.
-4. **لایهٔ ویدیو / unmute (P3)** و در صورت نیاز خروجی امن HDMI (P4).
-5. **USB gadget (P10):** روی این تصویر منوی PC-Link نیست؛ اگر `load≈14` و طوفان
-   `dwc_otg`/`service gadget` دیدید فقط forensic بگیرید — خاموش‌کردن «USB ضبط/بکاپ/آپدیت»
-   در منو این بار را کم نمی‌کند. جزئیات:
-   [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) بخش P10.
-6. **سیگنال و CAS (P5/P6):** فقط اگر بعد از برگشت `avplay` به RUN هنوز تصویر/صدا نبود.
-7. **reboot اجباری (تأیید ۲۰۲۶-۰۸-۱۲):** اگر P1–P4 جواب نداد و Telnet زنده است،
-   **`/sbin/reboot -f`** (نه فقط `reboot`) — روی باکس آزمایش `sync; reboot` اجرا نشد.
-   Playbook کامل: [`docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md`](freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md)
-8. **خودکار:** `python tools/av_recovery_run.py`
-
-### بازیابی تأیید‌شده (۲۰۲۶-۰۸-۱۲)
-
-Iran International HD روی Badr پس از **`/sbin/reboot -f`** + پچ `bianbiang.sh` + زپ با ref
-صحیح (`1:0:2:82:2:1:1042FE9:0:0:0:`) برگشت. جزئیات، Motor/USALS، و نقشهٔ patch:
-[`docs/freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md`](freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md).
-
-دستورهای آماده برای گام ۲ (از ریشهٔ مخزن، پس از تأیید شما):
-
-```powershell
-# محتویات نمونهٔ cmds.txt — فقط پس از تأیید اجرا شود
-# killall bianbiang
-# sleep 3
-# pidof bianbiang
-# cat /proc/msp/avplay00 | head -40
-```
-
-## قبل از قطع برق — forensic اجباری
-
-قطع برق سخت‌افزار/MMZ را ریست می‌کند و علائم اغلب برطرف می‌شوند، ولی **شواهد runtime
-را هم پاک می‌کند**. تا وقتی اسنپ‌شات ماندگار روی `/data` نوشته نشده، برق را قطع نکنید.
-
-### یک‌بار استقرار ناظر
-
-```powershell
-python tools/deploy_freeze_watch.py
-```
-
-ناظر در `/data/freeze_tools/` نصب می‌شود و از طریق `/home/gx/local/user_script`
-(مسیر موجود در `bianbiang.sh`) بعد از بوت دوباره بالا می‌آید. اگر امضای فریز
-حدود **۱۲۰ ثانیه** پایدار بماند (`avplay=STOP` / PID خالی / timeout خواندن MSP، با
-`bianbiang` زنده)، ابتدا اسنپ‌شات زمان‌دار می‌نویسد و سپس — با `AUTO_RECOVERY=1` —
-`live_prog` را backup کرده و **`/sbin/reboot -f`** می‌کند. حداکثر ۲ بازیابی در ۲۴ ساعت؛
-۳ دقیقهٔ اول بعد از بوت بازیابی نمی‌شود. خاموش کردن: `touch /data/freeze_tools/DISABLE_AUTO_RECOVERY`.
-
-### وقتی همین الان فریز می‌بینید
-
-```powershell
-python tools/freeze_capture.py
-```
-
-تا پیام `DUMP_OK` و فایل `SUMMARY.txt` را ببینید. **بعد از آن** قطع برق مجاز است.
-
-### بعد از روشن‌شدن دوباره
-
-```powershell
-python tools/freeze_pull.py          # آخرین اسنپ‌شات → build/freeze_snap/
-python tools/freeze_pull.py --list   # فهرست روی باکس
-```
-
-محتوای هر اسنپ‌شات: `avplay`/`sync`/`irq`/`ps`/`dmesg`/`db_stat`/`SUMMARY.txt` و برچسب‌هایی
-مثل `AV_STOP`, `NO_VDEC`, `USB_IRQ_STORM_SUSPECT`, `DB_DISK_OK`.
-
-برای پورت کل راه‌حل به فریمور ارتقایافته و محدودیت‌های P10 (چرا از Telnet نمی‌شود
-PC-Link را خاموش کرد / ممنوعیت `rmmod g_service`):
-
-- [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)
+- **بازیابی خودکار:** نگهبان روی رسیور با دابل‌کلیک `PATCH_RECEIVER.bat` نصب می‌شود. وضعیتش را `CHECK_RECEIVER.bat` نشان می‌دهد.
+- **بازیابی دستی:** [`freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md`](freeze/AV_RECOVERY_RUNBOOK_2026-08-12.md) (`/sbin/reboot -f`).
+- **قبل از قطع برق:** اگر رسیور در شبکه است، `python tools/freeze_state.py` را اجرا کنید تا عکس فقط‌خواندنی در `build/freeze_state/` ذخیره شود.
 
 ## رفع از طریق اتصال آنلاین به رسیور
 

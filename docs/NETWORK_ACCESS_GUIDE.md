@@ -124,27 +124,25 @@ python tools/telnet_run.py cmds.txt
 اگر IP عوض شد، همان ثابت را در ابزار مربوطه ویرایش کنید یا قبل از اجرا در اسکریپت
 override کنید.
 
-### Forensic فریز (قبل از قطع برق)
+### عکس فریز (قبل از قطع برق)
 
-قطع برق شواهد runtime را پاک می‌کند. وقتی تصویر/صدا یا لیست کانال فریز است:
+قطع برق شواهد runtime را پاک می‌کند. وقتی تصویر و صدا فریز است و رسیور هنوز در شبکه است:
 
 ```powershell
-python tools/deploy_freeze_watch.py   # یک‌بار
-python tools/freeze_capture.py        # اسنپ‌شات فوری روی /data/freeze_snap
-# فقط بعد از DUMP_OK / SUMMARY.txt برق را قطع کنید
-python tools/freeze_pull.py           # بعد از روشن‌شدن مجدد
+python tools/freeze_state.py      # عکس فقط‌خواندنی → build/freeze_state/
+python tools/blackbox_record.py   # ضبط مداوم از PC → build/blackbox/
 ```
 
-جزئیات در [`troubleshooting-fa.md`](troubleshooting-fa.md).
+بازیابی خودکار با نگهبان روی رسیور انجام می‌شود (`PATCH_RECEIVER.bat`). جزئیات در
+[`freeze/AUDIO_FREEZE_2026-11.md`](freeze/AUDIO_FREEZE_2026-11.md).
 
-پس از ارتقای فریمور vendor، قبل از کپی دوبارهٔ پچ‌ها چک‌لیست
-[`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) را طی کنید.
+پس از ارتقای فریمور vendor یا ریست کارخانه، `PATCH_RECEIVER.bat` را دوباره اجرا کنید
+([`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)).
 
 ### نکات عملی Telnet روی این باکس
 
 - اسلات نشست محدود است؛ **هم‌زمان چند session باز نگذارید**.
-- اگر login گیر کرد، یک بار صبر کنید یا sessionهای قبلی را ببندید؛ در صورت نیاز
-  `tools/ensure_gadget_up.py` الگوی retry دارد.
+- اگر login گیر کرد، یک بار صبر کنید یا sessionهای قبلی را ببندید.
 - در PowerShell برای فایل دستورات از encoding بدون BOM استفاده کنید
   (`encoding='utf-8'` در Python)، وگرنه ممکن است خط اول خراب شود.
 - برای خروجی فارسی/یونیکد در کنسول: `$env:PYTHONIOENCODING='utf-8'`
