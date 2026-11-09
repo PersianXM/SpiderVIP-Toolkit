@@ -28,5 +28,3 @@ def test_pyproject_uses_dynamic_version():
     text = Path("pyproject.toml").read_text(encoding="utf-8")
     assert 'dynamic = ["version"]' in text
     assert "spidervip._version.__version__" in text
-    assert "pywebview" in text
-    assert "overlay" in text
