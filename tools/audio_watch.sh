@@ -11,17 +11,20 @@
 # Menus, channel changes and standby stop audio DMA but never fill the
 # port, so they do not trigger it.
 #
-# Safety: no action in the first MIN_UPTIME seconds after boot; after
-# MAX_STREAK reboots in a row without a healthy RESET_UPTIME run it only
-# logs; touch $D/disable to turn it off. It never changes drivers,
-# settings or g_service.
+# Safety: no action in the first MIN_UPTIME seconds after boot. After
+# MAX_STREAK auto reboots in a row it only logs, so a box that freezes
+# right after every boot cannot loop forever. "In a row" means each boot
+# started from this script's own reboot: a normal power-off or reboot in
+# between, or RESET_UPTIME of healthy running, starts the count again.
+# touch $D/disable to turn it off. It never changes drivers, settings or
+# g_service.
 
 D=${AW_DIR:-/data/audio_watch}
 PROC=${AW_PROC:-/proc}
 INTERVAL=${AW_INTERVAL:-10}
 STALL_SEC=${AW_STALL_SEC:-60}
 MIN_UPTIME=${AW_MIN_UPTIME:-600}
-RESET_UPTIME=${AW_RESET_UPTIME:-7200}
+RESET_UPTIME=${AW_RESET_UPTIME:-1800}
 MAX_STREAK=${AW_MAX_STREAK:-3}
 PORT_FULL_PCT=${AW_PORT_FULL_PCT:-90}
 REBOOT=${AW_REBOOT:-reboot_box}
@@ -51,6 +54,7 @@ log() {
 }
 
 reboot_box() {
+    touch "$D/pending"
     sync
     /sbin/reboot -f
     sleep 60
@@ -86,11 +90,20 @@ save_evidence() {
     ls -t "$D"/event_*.txt 2>/dev/null | sed -n '6,$p' | while read -r old; do rm -f "$old"; done
 }
 
-streak=$(cat "$D/streak" 2>/dev/null)
-streak=${streak:-0}
+# The pending mark is left only by our own reboot. Without it the last
+# boot ended normally, so earlier auto reboots no longer count as in a row.
+if [ -e "$D/pending" ]; then
+    rm -f "$D/pending"
+    streak=$(cat "$D/streak" 2>/dev/null)
+    streak=${streak:-0}
+else
+    streak=0
+    echo 0 > "$D/streak"
+fi
 log "start streak=$streak"
 prev=""
 stalled=0
+held=0
 healthy_logged=0
 while :; do
     sleep "$INTERVAL"
@@ -106,16 +119,18 @@ while :; do
         stalled=$((stalled + INTERVAL))
     else
         stalled=0
+        held=0
     fi
     prev=$ai
     [ "$stalled" -ge "$STALL_SEC" ] || continue
+    [ "$held" = 0 ] || continue
     [ "$up" -ge "$MIN_UPTIME" ] || continue
     $DMESG | grep -q 'GetTSBuffer failed' || continue
     pct=$(port_used_pct)
     [ "${pct:-0}" -ge "$PORT_FULL_PCT" ] || continue
     if [ "$streak" -ge "$MAX_STREAK" ]; then
         log "freeze confirmed (aiao=$ai port=$pct%) but $streak auto reboots in a row, not rebooting"
-        stalled=-100000
+        held=1
         continue
     fi
     streak=$((streak + 1))

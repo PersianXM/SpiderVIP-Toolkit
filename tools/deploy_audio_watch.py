@@ -83,6 +83,13 @@ def run(sock, cmd, timeout=30):
 run.index = 100
 
 
+def stop_running(sock):
+    """Stop the copy started in this boot. The boot id check keeps a pid left
+    from an earlier boot, now reused by another process, from being killed."""
+    run(sock, "[ -e %s/pid ] && set -- $(cat %s/pid) && [ \"$2\" = \"$(cat %s)\" ] && kill $1 2>/dev/null; sleep 1"
+        % (BOX_DIR, BOX_DIR, BOOT_ID))
+
+
 def install(sock):
     body = open(SCRIPT, "rb").read().replace(b"\r\n", b"\n")
     digest = hashlib.md5(body).hexdigest()
@@ -97,6 +104,7 @@ def install(sock):
         raise RuntimeError("copy check failed (md5 %s, box %s)" % (digest, got[-1] if got else "none"))
     run(sock, "mv %s.new %s && chmod 755 %s" % (BOX_SCRIPT, BOX_SCRIPT, BOX_SCRIPT))
     run(sock, "rm -f %s/disable" % BOX_DIR)
+    stop_running(sock)
     run(sock, "[ -e %s ] || printf '#!/bin/sh\\n' > %s" % (HOOK, HOOK))
     run(sock, "grep -q 'audio_watch' %s || echo '%s' >> %s" % (HOOK, HOOK_LINE, HOOK))
     run(sock, "chmod 755 %s" % HOOK)
@@ -106,8 +114,8 @@ def install(sock):
 
 def remove(sock):
     run(sock, "set +H 2>/dev/null")
-    run(sock, "touch %s/disable 2>/dev/null; [ -e %s/pid ] && kill $(cut -d' ' -f1 %s/pid) 2>/dev/null; sleep 1"
-        % (BOX_DIR, BOX_DIR, BOX_DIR))
+    run(sock, "touch %s/disable 2>/dev/null" % BOX_DIR)
+    stop_running(sock)
     run(sock, "[ -e %s ] && sed -i '/audio_watch/d' %s" % (HOOK, HOOK))
     run(sock, "[ -e %s ] && [ \"$(grep -cv '^#!' %s)\" = 0 ] && rm -f %s" % (HOOK, HOOK, HOOK))
     run(sock, "rm -rf %s" % BOX_DIR)
