@@ -18,6 +18,13 @@
 # between, or RESET_UPTIME of healthy running, starts the count again.
 # touch $D/disable to turn it off. It never changes drivers, settings or
 # g_service.
+#
+# It also sets kernel.panic to PANIC_SEC. The vendor kernel panics on a soft
+# lockup or a 120 s hung task but has kernel.panic=0, so a panic leaves the
+# box frozen with no picture, network or remote until the power is cut.
+# With PANIC_SEC the kernel reboots by itself that many seconds after a
+# panic. The value is not saved: every boot starts at 0 until this script
+# runs again. AW_PANIC_SEC=0 leaves it alone.
 
 D=${AW_DIR:-/data/audio_watch}
 PROC=${AW_PROC:-/proc}
@@ -29,6 +36,7 @@ MAX_STREAK=${AW_MAX_STREAK:-3}
 PORT_FULL_PCT=${AW_PORT_FULL_PCT:-90}
 REBOOT=${AW_REBOOT:-reboot_box}
 DMESG=${AW_DMESG:-dmesg}
+PANIC_SEC=${AW_PANIC_SEC:-10}
 
 # Keep running after the Telnet session that started it closes.
 trap '' HUP
@@ -101,6 +109,11 @@ else
     echo 0 > "$D/streak"
 fi
 log "start streak=$streak"
+if [ "$PANIC_SEC" != 0 ]; then
+    old=$(cat "$PROC/sys/kernel/panic" 2>/dev/null)
+    echo "$PANIC_SEC" > "$PROC/sys/kernel/panic" 2>/dev/null
+    log "kernel.panic $old -> $(cat "$PROC/sys/kernel/panic" 2>/dev/null)"
+fi
 prev=""
 stalled=0
 held=0
