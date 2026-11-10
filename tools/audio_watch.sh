@@ -153,7 +153,9 @@ else
     streak=0
     echo 0 > "$D/streak"
 fi
-log "start streak=$streak"
+# The clock is not set yet this early in a boot, so every boot logs the same
+# date here. The boot id tells one boot from the next.
+log "start streak=$streak boot=${boot%%-*}"
 if [ "$PANIC_SEC" != 0 ]; then
     old=$(cat "$PROC/sys/kernel/panic" 2>/dev/null)
     echo "$PANIC_SEC" > "$PROC/sys/kernel/panic" 2>/dev/null
