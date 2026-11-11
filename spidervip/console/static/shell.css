@@ -392,6 +392,12 @@ button:active {
   gap: 1rem;
 }
 
+.workspaces .card-patch {
+  grid-column: 1 / -1;
+  min-height: 0;
+  background: var(--sv-orange);
+}
+
 .card {
   position: relative;
   display: grid;

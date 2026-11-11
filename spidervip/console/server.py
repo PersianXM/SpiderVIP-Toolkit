@@ -81,6 +81,18 @@ def _start_frequency_backend(frequency_workspace: Optional[Path] = None) -> Tupl
     return server, port
 
 
+def _start_patches_backend() -> Tuple[Any, int]:
+    from werkzeug.serving import make_server
+
+    from spidervip.patches.webapp import create_app as create_patches_app
+
+    port = _free_port()
+    server = make_server("127.0.0.1", port, create_patches_app(), threaded=True)
+    thread = threading.Thread(target=server.serve_forever, name="patches-backend", daemon=True)
+    thread.start()
+    return server, port
+
+
 def _has_mount_assignment(text: str) -> bool:
     """True only when the mount *assignment* was injected (not a mere JS identifier)."""
     return 'window.SPIDERVIP_MOUNT="' in text or "window.SPIDERVIP_MOUNT='" in text
@@ -346,10 +358,13 @@ def create_console_app(
         Path(frequency_workspace) if frequency_workspace else None
     )
 
+    patches_server, patches_port = _start_patches_backend()
+
     app = Flask(__name__)
     app.config["CHANNELS_BACKEND_PORT"] = channels_port
     app.config["FREQUENCY_BACKEND_PORT"] = frequency_port
-    app.config["_BACKEND_SERVERS"] = (channels_server, frequency_server)
+    app.config["PATCHES_BACKEND_PORT"] = patches_port
+    app.config["_BACKEND_SERVERS"] = (channels_server, frequency_server, patches_server)
     app.config["CONNECTION_STORE"] = store
     app.config["CHANNELS_SIMULATE_DEFAULT"] = channels_simulate
 
@@ -478,6 +493,21 @@ def create_console_app(
             connection=_conn_payload(),
         )
 
+    @app.route("/patches", defaults={"subpath": ""}, methods=methods)
+    @app.route("/patches/", defaults={"subpath": ""}, methods=methods)
+    @app.route("/patches/<path:subpath>", methods=methods)
+    def patches_proxy(subpath: str):
+        return _proxy_to_backend(
+            app.config["PATCHES_BACKEND_PORT"],
+            "/patches",
+            subpath,
+            method=request.method,
+            query=request.args.to_dict(flat=False),
+            body=request.get_data(),
+            headers={k: v for k, v in request.headers.items()},
+            connection=_conn_payload(),
+        )
+
     return app
 
 
@@ -520,4 +550,5 @@ def run_console(
     print(f"SpiderVIP Console v{__version__} → http://{host}:{port}/")
     print(f"  Frequencies → http://{host}:{port}/frequencies/")
     print(f"  Channels    → http://{host}:{port}/channels/")
+    print(f"  Patches     → http://{host}:{port}/patches/")
     app.run(host=host, port=port, debug=False, use_reloader=False)

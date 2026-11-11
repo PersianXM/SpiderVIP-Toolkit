@@ -14,6 +14,7 @@
 | `/` | پوسته + پنل اتصال مشترک |
 | `/frequencies/` | به‌روزرسانی فرکانس (همهٔ ماهواره‌ها) |
 | `/channels/` | کانال و Favorite |
+| `/patches/` | وصلهٔ رسیور (نصب/حذف افزونه‌های روی رسیور) — [`../patches/README.md`](../patches/README.md) |
 
 API اتصال: `GET/POST /api/connection` ، `POST /api/connection/probe` ، `GET /api/version`
 
