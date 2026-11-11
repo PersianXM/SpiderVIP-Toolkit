@@ -116,6 +116,10 @@ class ApplyReport:
     verified: bool = False
     rolled_back: bool = False
     snapshot_path: Optional[str] = None
+    # Whole-file live_prog + enigma_db snapshot on the box (``snap_…``).
+    receiver_snapshot: Optional[str] = None
+    # Operator note (Persian), e.g. "check the antenna/Motor menu".
+    notice: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -125,4 +129,6 @@ class ApplyReport:
             "verified": self.verified,
             "rolled_back": self.rolled_back,
             "snapshot_path": self.snapshot_path,
+            "receiver_snapshot": self.receiver_snapshot,
+            "notice": self.notice,
         }

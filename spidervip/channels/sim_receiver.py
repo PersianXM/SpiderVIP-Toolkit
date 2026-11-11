@@ -74,16 +74,19 @@ class SimulatedChannelReceiver:
 
     ENIGMA_DB = "/data/gx/local/enigma_db"
     STAGING = "/data/gx/local/enigma_db_staging"
+    KEEP_SNAPSHOTS = 3
 
     def __init__(
         self,
         *,
         overwrite_on_reboot: bool = False,
         fail_upload: bool = False,
+        fail_snapshot: bool = False,
         reboot_delay: float = 0.0,
     ):
         self.overwrite_on_reboot = overwrite_on_reboot
         self.fail_upload = fail_upload
+        self.fail_snapshot = fail_snapshot
         self.reboot_delay = reboot_delay
         self._connected = False
         self._channels = demo_channels()
@@ -91,7 +94,8 @@ class SimulatedChannelReceiver:
         self._live_files = favorites_to_bouquet_files(self._favorites)
         self._staged_files: Dict[str, str] = {}
         self._factory_files = copy.deepcopy(self._live_files)
-        self._live_prog_backup = None
+        self._snapshots: Dict[str, Dict[str, Dict[str, str]]] = {}
+        self._snap_seq = 0
         self.actions: List[str] = []
         self.rebooted = False
 
@@ -144,55 +148,48 @@ class SimulatedChannelReceiver:
         self._staged_files = {}
         self.actions.append("activate_staged")
 
-    def backup_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> str:
-        self.actions.append("backup_live_prog")
-        self._live_prog_backup = copy.deepcopy(self._factory_files)
-        self._motor_cleared = False
-        return remote_path
+    # --- whole-file snapshots (mirror LiveChannelReceiver) -------------------
+    def snapshot_receiver_db(self, label: str = "") -> str:
+        """Copy the simulated master DB + exports as one whole snapshot."""
 
-    def restore_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> None:
-        self.actions.append("restore_live_prog")
-        if getattr(self, "_live_prog_backup", None) is not None:
-            self._factory_files = copy.deepcopy(self._live_prog_backup)
+        self.actions.append("snapshot_receiver_db")
+        if self.fail_snapshot:
+            raise RuntimeError("Simulated snapshot failure")
+        self._snap_seq += 1
+        name = f"snap_20260101_{self._snap_seq:06d}{label}"
+        self._snapshots[name] = {
+            "live_prog": copy.deepcopy(self._factory_files),
+            "enigma_db": copy.deepcopy(self._live_files),
+        }
+        return name
+
+    def list_receiver_snapshots(self) -> List[str]:
+        return sorted(self._snapshots, reverse=True)
+
+    def prune_receiver_snapshots(self, keep_also: str = "") -> None:
+        self.actions.append("prune_snapshots")
+        names = sorted(self._snapshots, reverse=True)
+        for name in names[self.KEEP_SNAPSHOTS :]:
+            if name != keep_also:
+                self._snapshots.pop(name, None)
+
+    def restore_receiver_snapshot(self, name: str) -> None:
+        self.actions.append(f"restore_snapshot:{name}")
+        snap = self._snapshots.get(name)
+        if snap is None:
+            raise RuntimeError(f"receiver snapshot missing or incomplete: {name}")
+        self._factory_files = copy.deepcopy(snap["live_prog"])
+        # Exports are copied back too; a forced reboot regenerates them anyway.
+        self._live_files = copy.deepcopy(snap["enigma_db"])
+        self._favorites = parse_bouquet_files(self._live_files)
 
     def commit_service_list(self) -> str:
         """Simulate WebIF servicelistreload committing enigma_db into live_prog."""
 
         self.actions.append("commit_service_list")
-        # New master snapshot = currently activated bouquet files.
+        # New master DB = currently activated bouquet files.
         self._factory_files = copy.deepcopy(self._live_files)
-        # Mirror firmware side-effect: MotorSettingReinit clears motor markers.
-        self._motor_cleared = True
         return "<e2state>True</e2state><e2statetext>reloaded both</e2statetext>"
-
-    def preserve_motor_from_backup(self, remote_backup: str = "/data/gx/live_prog.bak_spidervip") -> int:
-        self.actions.append("preserve_motor_from_backup")
-        if getattr(self, "_live_prog_backup", None) is None:
-            return 0
-        # Favorites stay in _factory_files (post-commit); motor flag restored.
-        self._motor_cleared = False
-        return 1
-
-    def pull_live_prog_bytes(self) -> bytes:
-        self.actions.append("pull_live_prog_bytes")
-        # Tiny synthetic live_prog with one sat name so capture works in simulate.
-        name = b"26.0E Ku-band Badr 4/5/6/7"
-        return b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 64
-
-    def apply_motor_profile(self, profile, *, live_prog_backup: str = "") -> dict:
-        self.actions.append("apply_motor_profile")
-        # Prefer profile path; always clear the simulated wipe flag.
-        self._motor_cleared = False
-        has_capture = False
-        try:
-            has_capture = bool(getattr(profile, "has_capture", False) or profile.get("captured_live_prog_b64"))
-        except Exception:
-            has_capture = False
-        if has_capture:
-            return {"method": "profile_windows", "restored": 1}
-        if getattr(self, "_live_prog_backup", None) is not None:
-            return {"method": "pre_apply_backup", "restored": 1}
-        return {"method": "nothing_to_restore", "restored": 0}
 
     def restore_bouquet_files(self, files: Dict[str, str], *, commit: bool = False) -> None:
         self._live_files = dict(files)
@@ -204,12 +201,12 @@ class SimulatedChannelReceiver:
             except Exception:
                 pass
 
-    def reboot(self) -> None:
-        self.actions.append("reboot")
+    def reboot(self, *, force: bool = False) -> None:
+        self.actions.append("reboot_force" if force else "reboot")
         self.rebooted = True
         if self.reboot_delay:
             time.sleep(self.reboot_delay)
-        if self.overwrite_on_reboot:
+        if self.overwrite_on_reboot or force:
             # Emulate bianbiang regenerating bouquets from live_prog.
             self._live_files = copy.deepcopy(self._factory_files)
             self._favorites = parse_bouquet_files(self._live_files)

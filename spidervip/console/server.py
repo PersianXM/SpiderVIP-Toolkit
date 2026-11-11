@@ -19,7 +19,6 @@ from .connection import TOOLKIT_ROOT, ConnectionStore, ReceiverConnection, probe
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Same anchoring as the connection store: independent of the caller's cwd.
 DEFAULT_CHANNELS_WORKSPACE = TOOLKIT_ROOT / ".spidervip_channels"
-FREQUENCY_MODULE_NAME = "spidervip_frequency_app"
 
 _LOOPBACK_BINDS = {"127.0.0.1", "localhost", "::1"}
 
@@ -62,41 +61,10 @@ def _start_channels_backend(
     return server, port
 
 
-def _load_frequency_flask_app():
-    """Load spidervip/frequency/app.py under a unique module name.
+def _start_frequency_backend(frequency_workspace: Optional[Path] = None) -> Tuple[Any, int]:
+    from spidervip.frequency.webapp import create_app as create_frequency_app
 
-    A bare ``from app import app`` picks up whatever top-level ``app`` module
-    is first on sys.path (or already imported), not necessarily this file.
-    The frequency dir stays on sys.path because app.py imports its siblings
-    (scraper, receiver, deploy) by bare name.
-    """
-    import importlib.util
-    import sys
-
-    freq_dir = Path(__file__).resolve().parents[1] / "frequency"
-    if str(freq_dir) not in sys.path:
-        sys.path.insert(0, str(freq_dir))
-
-    existing = sys.modules.get(FREQUENCY_MODULE_NAME)
-    if existing is not None:
-        return existing.app
-
-    spec = importlib.util.spec_from_file_location(FREQUENCY_MODULE_NAME, freq_dir / "app.py")
-    if spec is None or spec.loader is None:  # pragma: no cover
-        raise SystemExit(f"Cannot load frequency app from {freq_dir / 'app.py'}")
-    module = importlib.util.module_from_spec(spec)
-    # Register before exec: Flask resolves root_path (templates/) via sys.modules.
-    sys.modules[FREQUENCY_MODULE_NAME] = module
-    try:
-        spec.loader.exec_module(module)
-    except BaseException:
-        sys.modules.pop(FREQUENCY_MODULE_NAME, None)
-        raise
-    return module.app
-
-
-def _start_frequency_backend() -> Tuple[Any, int]:
-    freq_app = _load_frequency_flask_app()
+    freq_app = create_frequency_app(workspace=frequency_workspace)
 
     port = _free_port()
     try:
@@ -183,7 +151,9 @@ def _inject_page(
         elif "</HEAD>" in text:
             text = text.replace("</HEAD>", f"{theme_link}</HEAD>", 1)
 
-    return text.encode("utf-8")
+    from spidervip.app_meta import stamp_html
+
+    return stamp_html(text).encode("utf-8")
 
 
 def _proxy_timeout_for(mount: str, subpath: str, method: str) -> float:
@@ -193,12 +163,12 @@ def _proxy_timeout_for(mount: str, subpath: str, method: str) -> float:
     (e.g. hashing live_prog), not a need for a 15‑minute proxy window.
     Favorite Apply with reboot is intentionally long (commit + motor restore
     + reboot + verify) and must not die as an opaque HTML/proxy 500.
+    Frequency update runs its long work as background jobs (polled via
+    ``/frequencies/api/job``), so it needs no special window.
     """
     path = (subpath or "").strip("/").lower()
     method_u = (method or "GET").upper()
     mount_n = mount.rstrip("/")
-    if mount_n == "/frequencies" and path == "send_to_receiver" and method_u == "POST":
-        return 120.0
     if mount_n == "/channels" and path == "api/receiver/apply" and method_u == "POST":
         return 600.0
     if method_u in ("POST", "PUT", "PATCH"):
@@ -340,6 +310,7 @@ def create_console_app(
     workspace: Optional[str] = None,
     catalog_url: Optional[str] = None,
     connection_store: Optional[ConnectionStore] = None,
+    frequency_workspace: Optional[str] = None,
 ):
     try:
         from flask import Flask, jsonify, request, send_from_directory
@@ -371,7 +342,9 @@ def create_console_app(
         workspace=workspace,
         catalog_url=catalog_url,
     )
-    frequency_server, frequency_port = _start_frequency_backend()
+    frequency_server, frequency_port = _start_frequency_backend(
+        Path(frequency_workspace) if frequency_workspace else None
+    )
 
     app = Flask(__name__)
     app.config["CHANNELS_BACKEND_PORT"] = channels_port
@@ -382,33 +355,41 @@ def create_console_app(
 
     @app.errorhandler(404)
     def _console_json_404(err):
-        # Frequency UI sometimes posts to /send_to_receiver without mount prefix;
-        # return JSON instead of HTML DOCTYPE so the page shows a clear hint.
+        # API calls that miss their mount prefix get JSON, never an HTML page.
         accept = (request.headers.get("Accept") or "").lower()
         wants_json = (
             "application/json" in accept
             or request.method in ("POST", "PUT", "PATCH", "DELETE")
-            or request.path.rstrip("/").endswith(
-                ("/send_to_receiver", "/apply", "/scrape", "/load_receiver", "/satellites")
-            )
+            or "/api/" in request.path
         )
         if wants_json:
             return jsonify(
                 {
                     "ok": False,
                     "error": f"مسیر روی کنسول پیدا نشد: {request.path}",
-                    "hint": "از /frequencies/ باز کنید (مثلاً /frequencies/send_to_receiver).",
+                    "hint": "مسیرهای ماژول‌ها زیر /frequencies/ یا /channels/ هستند (مثلاً /frequencies/api/job).",
                 }
             ), 404
         return err.get_response()
 
     @app.get("/")
     def shell():
-        return send_from_directory(STATIC_DIR, "shell.html")
+        from flask import Response
+
+        from spidervip.app_meta import stamp_html
+
+        raw = (STATIC_DIR / "shell.html").read_text(encoding="utf-8")
+        return Response(stamp_html(raw), mimetype="text/html; charset=utf-8")
 
     @app.get("/static/console/<path:rel>")
     def console_static(rel: str):
         return send_from_directory(STATIC_DIR, rel)
+
+    @app.get("/api/version")
+    def api_version():
+        from spidervip.app_meta import version_dict
+
+        return jsonify(version_dict())
 
     @app.get("/api/connection")
     def get_connection():
@@ -534,7 +515,9 @@ def run_console(
         workspace=workspace,
         catalog_url=catalog_url,
     )
-    print("SpiderVIP Console → http://{host}:{port}/".format(host=host, port=port))
+    from spidervip._version import __version__
+
+    print(f"SpiderVIP Console v{__version__} → http://{host}:{port}/")
     print(f"  Frequencies → http://{host}:{port}/frequencies/")
     print(f"  Channels    → http://{host}:{port}/channels/")
     app.run(host=host, port=port, debug=False, use_reloader=False)

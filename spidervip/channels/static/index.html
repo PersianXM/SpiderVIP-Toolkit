@@ -124,7 +124,18 @@
             </div>
           </div>
           <div id="applyStatus" class="status-box">Idle</div>
+          <div id="motorNotice" class="motor-notice" dir="rtl" hidden></div>
           <ol id="applySteps" class="steps"></ol>
+          <div class="rollback-block">
+            <h4>Rollback (whole live_prog snapshot)</h4>
+            <p class="muted hint">Each Apply copies the whole <code>live_prog</code> + <code>enigma_db</code>
+              on the receiver first. Rollback copies one back and force-reboots.</p>
+            <div class="row">
+              <select id="snapshotSelect" aria-label="Receiver snapshot"><option value="">— load snapshots —</option></select>
+              <button id="btnLoadSnapshots" class="ghost compact" type="button">Load</button>
+              <button id="btnRollback" class="ghost compact" type="button" disabled>Rollback</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -141,6 +152,7 @@
     </form>
   </dialog>
 
+  <div class="app-version" id="appVersion" title="SpiderVIP Toolkit">v__SPIDERVIP_VERSION__</div>
   <script src="/static/app.js"></script>
 </body>
 </html>

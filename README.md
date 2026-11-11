@@ -1,6 +1,6 @@
 # SpiderVIP Toolkit
 
-**Short summary (EN):** Monorepo toolkit for Spider VIP satellite receivers — A/V freeze forensics & patches, Channel & Favorite Manager, Frequency Manager (TP / LyngSat sync), and the unified **SpiderVIP Console** (one local port mounting Frequency + Channels with a shared receiver connection). GitHub: [PersianXM/SpiderVIP-Toolkit](https://github.com/PersianXM/SpiderVIP-Toolkit).
+**Short summary (EN):** Monorepo toolkit for Spider VIP satellite receivers — A/V freeze forensics & patches, Channel & Favorite Manager, Frequency update (all satellites from the daily OpenPLi/LyngSat list), and the unified **SpiderVIP Console** (one local port mounting Frequency + Channels with a shared receiver connection). GitHub: [PersianXM/SpiderVIP-Toolkit](https://github.com/PersianXM/SpiderVIP-Toolkit).
 
 ---
 
@@ -14,7 +14,7 @@
 |---|---|---|
 | فریز صوت/تصویر | `spidervip/freeze/`، `patches/`، ابزارهای freeze در `tools/` | [`docs/freeze/README.md`](docs/freeze/README.md) |
 | کانال و Favorite | `spidervip/channels/` | [`docs/channels/README.md`](docs/channels/README.md) |
-| مدیریت فرکانس (Frequency Manager) | `spidervip/frequency/` | [`docs/frequency/README.md`](docs/frequency/README.md) |
+| به‌روزرسانی فرکانس (Frequency update) | `spidervip/frequency/` | [`docs/frequency/README.md`](docs/frequency/README.md) |
 | کنسول واحد (SpiderVIP Console) | `spidervip/console/` | [`docs/console/README.md`](docs/console/README.md) |
 
 نقشهٔ کامل و قوانین کار: [`docs/TOPICS.md`](docs/TOPICS.md) · نمای کلی فنی: [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) · طراحی UI: [`docs/design/`](docs/design/README.md) · پوشه‌های آرشیو هم‌جوار: [`docs/ARCHIVE_SIBLINGS.md`](docs/ARCHIVE_SIBLINGS.md)
@@ -24,7 +24,7 @@ docs/ + tools/     دانش و ابزار مشترک
 spidervip/
   freeze/          پایداری A/V، gadget، forensic
   channels/        live_prog / bouquet / favorite
-  frequency/       Frequency Manager (TP / منبع LyngSat)
+  frequency/       به‌روزرسانی فرکانس (همهٔ ماهواره‌ها، منبع OpenPLi/LyngSat)
   console/         پوستهٔ UI واحد — یک پورت، اتصال مشترک
 patches/           پچ‌های قابل استقرار روی rootfs
 ```
@@ -35,7 +35,7 @@ patches/           پچ‌های قابل استقرار روی rootfs
 
 ```powershell
 python -m pip install -e ".[console]"
-# یا: python -m pip install flask requests beautifulsoup4
+# یا: python -m pip install flask
 
 python -m spidervip.cli console --simulate
 # زنده (مثال IP — IP آزمایشگاهی شما را جایگزین کنید):
@@ -50,8 +50,7 @@ python -m spidervip.cli console --host 192.168.1.50
 
 ### نکات محصول مرتبط با Console / Frequency
 
-- **Deploy فرکانس:** پس از `servicelistreload`، تنظیمات Motor/USALS دیش بازگردانی می‌شود (همان ایدهٔ Favorite Apply؛ `MotorSettingReinit` فیلدهای موتور را پاک می‌کند).
-- **واکشی زندهٔ پایگاه فرکانس:** ابتدا FTP؛ در صورت بسته بودن پورت ۲۱، fallback به Telnet.
+- **به‌روزرسانی فرکانس:** همهٔ ماهواره‌ها از لیست روزانهٔ OpenPLi (ساخته‌شده از LyngSat)؛ قبل از هر اعمال snapshot کامل روی رسیور، پس از اعمال راه‌اندازی دوباره و مقایسهٔ تک‌تک TPها، و برگشت با یک کلیک. جزئیات: [`docs/frequency/README.md`](docs/frequency/README.md).
 
 ## اجرای جداگانهٔ ماژول‌ها (اختیاری)
 
@@ -63,13 +62,12 @@ python -m spidervip.cli channels dashboard --simulate
 # زنده: spidervip channels dashboard --host <IP>
 ```
 
-### Frequency Manager
+### به‌روزرسانی فرکانس
 
 ```powershell
-python -m pip install flask requests beautifulsoup4
-cd spidervip/frequency
-python app.py
-# http://127.0.0.1:5000
+python -m pip install flask
+python -m spidervip.frequency
+# http://127.0.0.1:5000  (معمولاً از کنسول: /frequencies/)
 ```
 
 ### فریز A/V (CLI / forensic)
@@ -91,7 +89,7 @@ python app.py
 ## پیش‌نیازها
 
 - **Python** ≥ 3.9
-- Console / Frequency: extras `console` → `flask`, `requests`, `beautifulsoup4`  
+- Console / Frequency: extras `console` → `flask`  
   (`pip install -e ".[console]"`)
 - تست: `pip install -e ".[dev]"` سپس `pytest -q`
 - دسترسی زندهٔ معمول آزمایشگاهی: Telnet / FTP روی LAN (نه بخشی از پیکربندی عمومی مخزن)
@@ -105,7 +103,7 @@ python app.py
 | [`docs/design/README.md`](docs/design/README.md) | سیستم طراحی / UI (توکن زنده: `theme.css`) |
 | [`docs/console/README.md`](docs/console/README.md) | کنسول واحد |
 | [`docs/channels/README.md`](docs/channels/README.md) | کانال و Favorite |
-| [`docs/frequency/README.md`](docs/frequency/README.md) | مدیریت فرکانس |
+| [`docs/frequency/README.md`](docs/frequency/README.md) | به‌روزرسانی فرکانس |
 | [`docs/freeze/README.md`](docs/freeze/README.md) | فریز و forensic |
 | [`docs/freeze/AUDIO_FREEZE_2026-11.md`](docs/freeze/AUDIO_FREEZE_2026-11.md) | علت مستقیم فریز و نگهبان خودکار |
 | [`docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](docs/FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) | پورت پچ به فریمور جدید |

@@ -190,6 +190,7 @@ def favorites_to_bouquet_files(
     for fav in favorites:
         styled_refs: List[str] = []
         indices: List[int] = []
+        missing_refs: List[str] = []
         seen = set()
         for ref in fav.channel_refs:
             key = service_identity(ref)
@@ -201,14 +202,20 @@ def favorites_to_bouquet_files(
             styled_refs.append(styled)
             if key is not None and key in index_map:
                 indices.append(index_map[key])
+            else:
+                missing_refs.append(styled)
         out_fav = FavoriteList(id=fav.id, name=fav.name, channel_refs=styled_refs)
         files[f"userbouquet.{fav.id}.tv"] = write_userbouquet(out_fav)
         if index_map:
-            if len(indices) != len(styled_refs):
-                missing = len(styled_refs) - len(indices)
+            if missing_refs:
+                sample = ", ".join(missing_refs[:5])
+                more = f" (+{len(missing_refs) - 5} more)" if len(missing_refs) > 5 else ""
                 raise ValueError(
                     f"Cannot build .simple indices for favorite '{fav.name}': "
-                    f"{missing} channel(s) missing from receiver channel table."
+                    f"{len(missing_refs)} channel(s) missing from receiver channel table "
+                    f"(not in live lamedb). Examples: {sample}{more}. "
+                    f"Pull from receiver, remove unresolved channels from this favorite, "
+                    f"then Apply again."
                 )
             files[f"userbouquet.{fav.id}.tv.simple"] = write_userbouquet_simple(fav.name, indices)
     return files

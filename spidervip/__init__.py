@@ -4,7 +4,7 @@ Topics (see docs/TOPICS.md):
 
 - ``spidervip.freeze`` — A/V freeze diagnose/repair
 - ``spidervip.channels`` — channel & favorite manager
-- ``spidervip.frequency`` — Frequency Manager (TP sync)
+- ``spidervip.frequency`` — frequency update for all satellites (OpenPLi/LyngSat source)
 - ``spidervip.console`` — reserved unified SpiderVIP Console shell
 """
 

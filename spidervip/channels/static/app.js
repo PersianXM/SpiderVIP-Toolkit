@@ -698,6 +698,7 @@
     $("banner").hidden = false;
     $("banner").textContent = data.persistence_warning || "";
     if (data.apply) {
+      showMotorNotice(data.apply);
       $("applyStatus").textContent = `${data.apply.status}: ${data.apply.message}`;
       $("applySteps").innerHTML = (data.apply.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
       const st = applyStageFromStatus(data.apply.status, data.apply.message);
@@ -866,7 +867,11 @@
 
   $("btnRestore").addEventListener("click", async () => {
     if (!state.pendingBackup) return;
-    if (!(await confirmDialog("Restore backup", "Replace local favorites (and channels) with this backup?"))) return;
+    if (!(await confirmDialog(
+      "Restore backup",
+      "Import favorites from this backup. If you already Pulled channels from the receiver, "
+      + "favorites are rematched onto the live channel table by name (needed after factory reset)."
+    ))) return;
     await api("/api/backup/restore", { method: "POST", body: JSON.stringify(state.pendingBackup) });
     toast("Backup restored into workspace");
     await refresh();
@@ -945,11 +950,19 @@
   }
 
   $("btnPull").addEventListener("click", async () => {
-    if (!(await confirmDialog("Pull from receiver", "Replace the local workspace with TV channels and favorites from the receiver?"))) return;
+    if (!(await confirmDialog(
+      "Pull from receiver",
+      "Load TV channels from the receiver. If the receiver has no favorites yet "
+      + "(e.g. after factory reset), your local favorites are kept and rematched by name."
+    ))) return;
     $("applyStatus").textContent = "Loading: pulling from receiver…";
     try {
       const res = await api("/api/receiver/pull", { method: "POST", body: "{}" });
-      toast(`Pulled ${res.channel_count} channels, ${res.favorite_count} favorites`);
+      const remap = res.remap || {};
+      const extra = res.favorites_source === "workspace-rematch"
+        ? ` (rematched: ${remap.name || 0} by name, ${remap.unresolved || 0} unresolved)`
+        : "";
+      toast(`Pulled ${res.channel_count} channels, ${res.favorite_count} favorites${extra}`);
       await refresh();
     } catch (err) {
       toast(err.message);
@@ -959,8 +972,9 @@
   $("btnApply").addEventListener("click", async () => {
     if (!(await confirmDialog(
       "Apply to receiver",
-      "This uploads Favorites, commits them into live_prog, restores Motor settings, "
-      + "then reboots to verify. Continue?"
+      "This takes a whole-file live_prog snapshot on the receiver, uploads Favorites, "
+      + "commits them into live_prog, then reboots to verify. Motor/USALS is not touched: "
+      + "check the antenna/Motor menu afterwards. Continue?"
     ))) return;
     $("btnApply").disabled = true;
     $("applyStatus").textContent = "Preparing…";
@@ -984,6 +998,7 @@
         report.message || res.error || ""
       }`;
       $("applySteps").innerHTML = (report.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      showMotorNotice(report);
       if (failed) {
         setApplyProgress({ filled: 0, current: 3, failed: true });
         toast(report.message || res.error || "Apply failed");
@@ -999,6 +1014,72 @@
       toast(err.message);
     } finally {
       $("btnApply").disabled = false;
+    }
+  });
+
+  function showMotorNotice(report) {
+    const box = $("motorNotice");
+    if (!box) return;
+    const text = (report && report.notice) || "";
+    box.hidden = !text;
+    box.textContent = text;
+  }
+
+  async function loadReceiverSnapshots() {
+    const sel = $("snapshotSelect");
+    const res = await api("/api/receiver/snapshots");
+    const names = res.snapshots || [];
+    sel.innerHTML = names.length
+      ? names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("")
+      : '<option value="">No snapshots on receiver</option>';
+    $("btnRollback").disabled = !names.length;
+  }
+
+  $("btnLoadSnapshots").addEventListener("click", async () => {
+    try {
+      await loadReceiverSnapshots();
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  $("btnRollback").addEventListener("click", async () => {
+    const name = $("snapshotSelect").value;
+    if (!name) return;
+    if (!(await confirmDialog(
+      "Rollback receiver",
+      `Copy the whole live_prog + enigma_db from ${name} back onto the receiver and force-reboot? `
+      + "The current state is snapshotted first. Favorites and any receiver settings changed "
+      + "since that snapshot go back too."
+    ))) return;
+    $("btnRollback").disabled = true;
+    $("btnApply").disabled = true;
+    $("applyStatus").textContent = `Rolling back to ${name}…`;
+    $("applySteps").innerHTML = "";
+    const stopFlag = { done: false };
+    const poller = pollApplyProgress(stopFlag);
+    try {
+      const res = await api("/api/receiver/rollback", {
+        method: "POST",
+        body: JSON.stringify({ snapshot: name }),
+      });
+      stopFlag.done = true;
+      await poller;
+      const report = res.report || {};
+      $("applyStatus").textContent = `${report.status || (res.ok ? "Completed" : "Failed")}: ${
+        report.message || res.error || ""
+      }`;
+      $("applySteps").innerHTML = (report.steps || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      showMotorNotice(report);
+      toast(report.message || res.error || "Rollback finished");
+    } catch (err) {
+      stopFlag.done = true;
+      await poller;
+      $("applyStatus").textContent = `Failed: ${err.message}`;
+      toast(err.message);
+    } finally {
+      $("btnApply").disabled = false;
+      $("btnRollback").disabled = false;
     }
   });
 

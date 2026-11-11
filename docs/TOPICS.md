@@ -11,7 +11,7 @@
 |---|---|---|---|
 | فریز صوت/تصویر | `spidervip/freeze/`، `patches/`، ابزارهای freeze/gadget در `tools/` | [`docs/freeze/README.md`](freeze/README.md) | `cursor/freeze-forensic-capture` و مشابه |
 | کانال و Favorite | `spidervip/channels/` | [`docs/channels/README.md`](channels/README.md) | `feature/channel-favorite-manager` |
-| مدیریت فرکانس (Frequency Manager) | `spidervip/frequency/` | [`docs/frequency/README.md`](frequency/README.md) | کار بعدی روی همین مسیر |
+| به‌روزرسانی فرکانس (Frequency update) | `spidervip/frequency/` | [`docs/frequency/README.md`](frequency/README.md) | نسخهٔ PC آماده؛ قدم بعد: اجرای خودکار روی رسیور |
 | کنسول واحد (SpiderVIP Console) | `spidervip/console/` | [`docs/console/README.md`](console/README.md) | فاز ۲؛ `spidervip console` |
 
 ## قوانین کار
@@ -28,7 +28,7 @@ docs/ + tools/          دانش و ابزار مشترک
         │
         ├── freeze      پایداری A/V، gadget، forensic
         ├── channels    live_prog / bouquet / favorite
-        ├── frequency   Frequency Manager (TP / LyngSat source)
+        ├── frequency   Frequency update (all satellites, OpenPLi/LyngSat source)
         └── console     پوستهٔ UI واحد (فاز ۲: اتصال مشترک + mount موضوعات)
 ```
 

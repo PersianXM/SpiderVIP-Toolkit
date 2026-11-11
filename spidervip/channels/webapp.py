@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+from spidervip._version import __version__ as APP_VERSION
+
 from .apply import ApplyBusyError, SafeApplyPipeline
 from .backup import (
     BackupError,
@@ -79,18 +81,39 @@ class ChannelApp:
         with self._op_lock:
             self.receiver.connect()
             try:
+                from .lamedb import align_favorite_refs, rematch_favorites_by_name
+
+                old_channels = self.manager.list_channels()
+                old_favorites = self.manager.list_favorites()
+                self.manager.remember_channel_names(old_channels)
                 channels = self.receiver.pull_channels()
                 favorites = self.receiver.pull_favorites()
                 self.manager.set_channels(channels, source="receiver")
-                from .lamedb import align_favorite_refs
-
                 snap = self.manager.get_snapshot()
-                snap.favorites = align_favorite_refs(favorites, channels)
+                remap_stats = {"identity": 0, "name": 0, "unresolved": 0}
+                if favorites:
+                    snap.favorites = align_favorite_refs(favorites, channels)
+                    mode = "receiver"
+                elif old_favorites:
+                    # Factory-reset / empty bouquet case: keep workspace favorites
+                    # and remap old DVB refs onto the freshly scanned channel table.
+                    rematched, remap_stats = rematch_favorites_by_name(
+                        old_favorites,
+                        name_channels=old_channels + self.manager.name_channels_for_remap(),
+                        target_channels=channels,
+                    )
+                    snap.favorites = rematched
+                    mode = "workspace-rematch"
+                else:
+                    snap.favorites = []
+                    mode = "empty"
                 self.manager.replace_snapshot(snap)
                 return {
                     "channel_count": len(channels),
                     "favorite_count": len(snap.favorites),
                     "status": self.receiver.get_status(),
+                    "favorites_source": mode,
+                    "remap": remap_stats,
                 }
             finally:
                 self.receiver.close()
@@ -195,9 +218,15 @@ def make_handler(app: ChannelApp):
                 ".svg": "image/svg+xml",
                 ".json": "application/json",
             }.get(path.suffix, "application/octet-stream")
+            if path.suffix == ".html":
+                from spidervip.app_meta import stamp_html
+
+                data = stamp_html(data.decode("utf-8")).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
+            if path.suffix == ".html":
+                self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
 
@@ -224,6 +253,7 @@ def make_handler(app: ChannelApp):
                         200,
                         {
                             "simulate": app.simulate,
+                            "app_version": APP_VERSION,
                             "version": snap.version,
                             "source": snap.source,
                             "channels": [c.to_dict() for c in snap.channels],
@@ -233,8 +263,10 @@ def make_handler(app: ChannelApp):
                             "apply": app.last_apply,
                             "pipeline": app.pipeline.status,
                             "persistence_warning": (
-                                "Apply commits Favorites into live_prog and restores Motor "
-                                "from the pre-apply backup automatically."
+                                "Apply commits Favorites into live_prog after a whole-file "
+                                "live_prog snapshot on the receiver. Motor/USALS is not "
+                                "touched — check the antenna/Motor menu after Apply; "
+                                "rollback restores the whole snapshot."
                             ),
                         },
                     )
@@ -242,8 +274,24 @@ def make_handler(app: ChannelApp):
                 if path == "/api/motor-profile":
                     return self._json(200, {"profile": app.manager.get_motor_profile().to_dict()})
 
+                if path == "/api/receiver/snapshots":
+                    if not app._op_lock.acquire(blocking=False):
+                        return self._json(409, {"error": "Another sensitive operation is running."})
+                    try:
+                        names = app.pipeline.list_receiver_snapshots()
+                    except ApplyBusyError as exc:
+                        return self._json(409, {"error": str(exc)})
+                    finally:
+                        app._op_lock.release()
+                    return self._json(200, {"snapshots": names})
+
                 if path == "/api/receiver/status":
                     return self._json(200, app.connection_status())
+
+                if path == "/api/version":
+                    from spidervip.app_meta import version_dict
+
+                    return self._json(200, version_dict())
 
                 if path == "/api/channels":
                     channels = app.manager.list_channels(
@@ -400,6 +448,27 @@ def make_handler(app: ChannelApp):
                     profile = MotorProfile.from_dict(data.get("profile") or data)
                     app.manager.set_motor_profile(profile)
                     return self._json(200, {"ok": True, "profile": profile.to_dict()})
+
+                if path == "/api/receiver/rollback":
+                    name = str(data.get("snapshot") or "").strip()
+                    if not name:
+                        return self._json(400, {"error": "snapshot is required"})
+                    if not app._op_lock.acquire(blocking=False):
+                        return self._json(409, {"error": "Another sensitive operation is running."})
+                    try:
+                        report = app.pipeline.rollback_to_snapshot(name)
+                        payload = report.to_dict()
+                        app.last_apply = payload
+                        if report.status.value == "Completed":
+                            return self._json(200, {"ok": True, "report": payload})
+                        return self._json(
+                            200,
+                            {"ok": False, "error": report.message or "Rollback failed", "report": payload},
+                        )
+                    except ApplyBusyError as exc:
+                        return self._json(409, {"error": str(exc)})
+                    finally:
+                        app._op_lock.release()
 
                 if path == "/api/receiver/apply":
                     if not app._op_lock.acquire(blocking=False):

@@ -2,6 +2,7 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 title SpiderVIP Console
+set "PYTHONPATH=%CD%;%PYTHONPATH%"
 
 echo.
 echo  SpiderVIP Console
@@ -22,15 +23,19 @@ if not errorlevel 1 (
   set "PY=python"
 )
 
+for /f "usebackq delims=" %%V in (`%PY% -c "from spidervip._version import __version__; print(__version__)" 2^>nul`) do set "APPVER=%%V"
+if defined APPVER (
+  echo  Version v%APPVER%
+  echo.
+)
+
 echo [1/4] Installing deps...
-%PY% -m pip install -q flask requests beautifulsoup4
+%PY% -m pip install -q flask
 if errorlevel 1 (
   echo [warn] pip install failed - continuing anyway
 )
 
-echo [2/4] Making sure local package is importable...
-set "PYTHONPATH=%CD%;%PYTHONPATH%"
-
+echo [2/4] Local package on PYTHONPATH.
 echo [3/4] Freeing port 8787 if needed...
 powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>nul
 

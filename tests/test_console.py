@@ -15,7 +15,7 @@ def test_console_shell_and_mounted_workspaces(tmp_path: Path):
 
     store = ConnectionStore(tmp_path / "connection.json")
     store.set(host="10.0.0.9", user="root", password="secret", persist=True)
-    app = create_console_app(simulate=True, connection_store=store)
+    app = create_console_app(simulate=True, connection_store=store, frequency_workspace=str(tmp_path / "freq"))
     client = app.test_client()
 
     home = client.get("/")
@@ -37,9 +37,11 @@ def test_console_shell_and_mounted_workspaces(tmp_path: Path):
     assert b'window.SPIDERVIP_MOUNT="/frequencies"' in freqs.data
     assert b"window.SPIDERVIP_CONNECTION=" in freqs.data
     assert b"10.0.0.9" in freqs.data
-    # Console-embedded fetch panel: no visible credential bar / host label.
-    assert b"sharedConnBar" not in freqs.data
-    assert b"standalone-creds" in freqs.data
+    # New frequency-update page; assets rewritten under the mount, theme kept on the Console.
+    assert "به‌روزرسانی فرکانس".encode("utf-8") in freqs.data
+    assert b'src="/frequencies/static/freq.js"' in freqs.data
+    assert b'href="/static/console/theme.css"' in freqs.data
+    assert client.get("/frequencies/static/freq.js").status_code == 200
 
     state = client.get("/channels/api/state")
     assert state.status_code == 200
@@ -55,28 +57,26 @@ def test_frequency_proxy_apis_return_json(tmp_path: Path):
     from spidervip.console.server import create_console_app
 
     store = ConnectionStore(tmp_path / "connection.json")
-    app = create_console_app(simulate=True, connection_store=store)
+    app = create_console_app(simulate=True, connection_store=store, frequency_workspace=str(tmp_path / "freq"))
     client = app.test_client()
 
-    sats = client.get("/frequencies/satellites")
-    assert sats.status_code == 200
-    assert "application/json" in (sats.content_type or "")
-    body = sats.get_json()
-    assert body is not None
-    assert body.get("ok") is True
-    assert "satellites" in body
+    plan = client.get("/frequencies/api/plan")
+    assert plan.status_code == 200
+    assert "application/json" in (plan.content_type or "")
+    assert plan.get_json() == {"ok": True, "plan": None}
 
-    # Even on FTP failure, response must be JSON (never HTML doctype).
-    live = client.post(
-        "/frequencies/load_receiver",
-        data=json.dumps({"host": "127.0.0.1", "user": "root", "password": "root"}),
-        content_type="application/json",
-    )
-    assert "application/json" in (live.content_type or "")
-    live_body = live.get_json()
-    assert live_body is not None
-    assert "ok" in live_body
-    assert not (live.data or b"").lstrip().startswith(b"<!doctype")
+    job = client.get("/frequencies/api/job")
+    assert job.get_json()["job"] is None
+
+    # Errors are JSON too (never an HTML doctype).
+    built = client.post("/frequencies/api/build", data=json.dumps({"selected": []}),
+                        content_type="application/json")
+    assert built.status_code == 400
+    assert "application/json" in (built.content_type or "")
+    assert built.get_json()["ok"] is False
+    missing = client.get("/frequencies/api/nope")
+    assert missing.status_code == 404 and missing.get_json()["ok"] is False
+    assert not (missing.data or b"").lstrip().lower().startswith(b"<!doctype")
 
 
 def test_console_shared_connection_api(tmp_path: Path):
@@ -85,7 +85,7 @@ def test_console_shared_connection_api(tmp_path: Path):
     from spidervip.console.server import create_console_app
 
     store = ConnectionStore(tmp_path / "connection.json")
-    app = create_console_app(simulate=True, connection_store=store)
+    app = create_console_app(simulate=True, connection_store=store, frequency_workspace=str(tmp_path / "freq"))
     client = app.test_client()
 
     got = client.get("/api/connection")
@@ -129,7 +129,7 @@ def test_simulate_choice_persists_and_reaches_channels_page(tmp_path: Path):
 
     path = tmp_path / "connection.json"
     store = ConnectionStore(path)
-    app = create_console_app(simulate=True, connection_store=store)
+    app = create_console_app(simulate=True, connection_store=store, frequency_workspace=str(tmp_path / "freq"))
     client = app.test_client()
 
     saved = client.post(
@@ -214,7 +214,8 @@ def test_save_connection_returns_json_when_channels_push_fails(tmp_path: Path, m
     from spidervip.console.connection import ConnectionStore
 
     store = ConnectionStore(tmp_path / "connection.json")
-    app = server.create_console_app(simulate=True, connection_store=store)
+    app = server.create_console_app(simulate=True, connection_store=store,
+                                    frequency_workspace=str(tmp_path / "freq"))
 
     def boom(*a, **kw):
         raise ConnectionRefusedError("backend down")
@@ -260,19 +261,16 @@ def test_proxy_timeout_on_post_warns_not_to_restart():
         lsock.close()
 
 
-def test_frequency_app_loaded_under_unique_name():
+def test_frequency_backend_is_the_new_package():
     pytest.importorskip("flask")
-    import sys
+    import spidervip.frequency as freq_pkg
 
-    from spidervip.console.server import FREQUENCY_MODULE_NAME, _load_frequency_flask_app
+    root = Path(freq_pkg.__file__).parent
+    for old in ("app.py", "scraper.py", "receiver.py", "receiver_data.xml"):
+        assert not (root / old).exists(), f"old frequency file still present: {old}"
+    from spidervip.frequency.webapp import create_app
 
-    a = _load_frequency_flask_app()
-    b = _load_frequency_flask_app()
-    assert a is b
-    mod = sys.modules[FREQUENCY_MODULE_NAME]
-    assert Path(mod.__file__).name == "app.py"
-    assert Path(mod.__file__).parent.name == "frequency"
-    assert Path(a.root_path).name == "frequency"
+    assert Path(create_app.__code__.co_filename).name == "webapp.py"
 
 
 def test_channels_apply_proxy_timeout_is_long():
@@ -282,4 +280,5 @@ def test_channels_apply_proxy_timeout_is_long():
 
     assert _proxy_timeout_for("/channels", "api/receiver/apply", "POST") >= 600.0
     assert _proxy_timeout_for("/channels", "api/receiver/pull", "POST") == 90.0
-    assert _proxy_timeout_for("/frequencies", "send_to_receiver", "POST") == 120.0
+    # Frequency long work runs as polled background jobs: plain POST window.
+    assert _proxy_timeout_for("/frequencies", "api/deploy", "POST") == 90.0

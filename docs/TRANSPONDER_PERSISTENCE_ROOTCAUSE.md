@@ -1,5 +1,14 @@
 # Transponder Persistence — Definitive Root-Cause Analysis
 
+> **Correction 2026-11-11** (see [`frequency/README.md`](frequency/README.md)):
+> `live_prog` is **LZ-compressed** (4-byte LE unpacked size header, ~1.9 MB unpacked;
+> only 4 of 227 satellite names appear as plain text). The "frequency = uint16 LE"
+> hits in §6 are therefore coincidental, and byte-window edits of `live_prog`
+> (e.g. Motor "restore" by copying bytes around satellite names) are unsafe.
+> `MotorSettingReinit` is the antenna-menu init, so a Motor wipe by
+> `servicelistreload` is unproven. The `servicelistreload` persistence result
+> below still stands and is what the new frequency update uses.
+
 **Date:** 2026-07-14
 **Device:** clap4k (Spider-VIP), 192.168.100.102
 **Question:** Why do edits to `satellites.xml` (and `lamedb`, `default_data.xml`)

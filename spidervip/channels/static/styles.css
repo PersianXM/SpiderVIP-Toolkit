@@ -728,3 +728,38 @@ dialog {
   .filters { grid-template-columns: 1fr; }
   .panel { min-height: 420px; }
 }
+
+.app-version {
+  position: fixed;
+  z-index: 40;
+  left: 12px;
+  bottom: 12px;
+  font-family: var(--sv-font, inherit);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--sv-ink);
+  background: var(--sv-white, #fffef9);
+  border: 2px solid var(--sv-ink);
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  box-shadow: 2px 2px 0 var(--sv-ink);
+  pointer-events: none;
+  user-select: none;
+  direction: ltr;
+}
+
+/* Apply: Motor check reminder + whole-file rollback */
+.motor-notice {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--warn, #d9a400);
+  background: color-mix(in srgb, var(--warn, #d9a400) 12%, transparent);
+  font-family: Vazirmatn, Tahoma, sans-serif;
+  line-height: 1.8;
+  font-size: 0.9rem;
+}
+.rollback-block { margin-top: 14px; }
+.rollback-block h4 { margin: 0 0 4px; font-size: 0.9rem; }
+.rollback-block select { min-width: 0; flex: 1 1 220px; }

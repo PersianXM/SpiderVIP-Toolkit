@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
+import re
 import time
 import urllib.error
 import urllib.request
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional
 from xml.etree import ElementTree as ET
 
 from .bouquets import parse_bouquet_files
 from .lamedb import parse_lamedb
 from .model import Channel, FavoriteList
 from .telnet_ftp import FTPClient, TelnetClient, probe_tcp
-
-if TYPE_CHECKING:
-    from .motor_profile import MotorProfile
 
 
 class LiveChannelReceiver:
@@ -29,6 +27,11 @@ class LiveChannelReceiver:
 
     ENIGMA_DB = "/data/gx/local/enigma_db"
     STAGING = "/data/gx/local/enigma_db_fav_staging"
+    LIVE_PROG = "/data/gx/live_prog"
+    # Favorite Apply snapshots (Frequency uses /data/spidervip_freq).
+    SNAP_ROOT = "/data/spidervip_fav"
+    KEEP_SNAPSHOTS = 3
+    MIN_FREE_KB = 20_000
 
     def __init__(
         self,
@@ -101,6 +104,13 @@ class LiveChannelReceiver:
                 "available, otherwise Telnet."
             ),
         }
+
+    def run(self, command: str, timeout: float = 60.0) -> str:
+        """Run one shell command over the open Telnet session; returns its output."""
+
+        if self._telnet is None:
+            raise RuntimeError("not connected")
+        return self._telnet.run(command, timeout=timeout)
 
     def _read_text(self, remote_path: str) -> str:
         if self._ftp is not None:
@@ -277,17 +287,101 @@ class LiveChannelReceiver:
             f"sync"
         )
 
-    def backup_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> str:
-        """Copy ``live_prog`` aside for rollback. Returns remote backup path."""
+    # --- whole-file receiver snapshots ------------------------------------
+    #
+    # ``live_prog`` is LZ-compressed (first 4 bytes = LE unpacked size; only a
+    # handful of satellite names appear as plain text). It is therefore only
+    # ever copied *whole* — never patched byte-wise. Same model as
+    # ``spidervip/frequency/deploy.py`` (separate snapshot root).
+
+    @staticmethod
+    def _q(path: str) -> str:
+        return "'" + path.replace("'", "'\\''") + "'"
+
+    @staticmethod
+    def _check_snapshot_name(name: str) -> str:
+        name = str(name or "").strip()
+        if not re.fullmatch(r"snap_[0-9]{8}_[0-9]{6}[A-Za-z0-9_]*", name):
+            raise ValueError(f"invalid receiver snapshot name: {name!r}")
+        return name
+
+    def snapshot_receiver_db(self, label: str = "") -> str:
+        """Copy the whole ``live_prog`` + ``enigma_db`` to ``SNAP_ROOT/snap_<stamp><label>``.
+
+        Verified with ``cmp``; raises if free space is short or the copy differs.
+        Returns the snapshot name.
+        """
 
         assert self._telnet is not None
-        # Local on-box cp — must not use the default 60s+ hash-style waits.
-        self._telnet.run(f"cp -f /data/gx/live_prog {remote_path}; sync", timeout=20.0)
-        return remote_path
+        label = re.sub(r"[^A-Za-z0-9_]", "", label or "")
+        name = f"snap_{time.strftime('%Y%m%d_%H%M%S')}{label}"
+        d = f"{self.SNAP_ROOT}/{name}"
+        q = self._q
+        free = self._telnet.run("df -k /data | tail -1 | awk '{print $4}'", timeout=15.0).split()
+        if free and free[-1].isdigit() and int(free[-1]) < self.MIN_FREE_KB:
+            raise RuntimeError(
+                f"Not enough free space on /data for a live_prog snapshot ({free[-1]} KB)."
+            )
+        out = self._telnet.run(
+            f"mkdir -p {q(d)} && cp -f {q(self.LIVE_PROG)} {q(d + '/live_prog')} && "
+            f"cp -rf {q(self.ENIGMA_DB)} {q(d + '/enigma_db')} && sync && "
+            f"cmp {q(self.LIVE_PROG)} {q(d + '/live_prog')} && echo SNAP_OK",
+            timeout=120.0,
+        )
+        if "SNAP_OK" not in out:
+            raise RuntimeError(f"live_prog snapshot failed: {out[-200:]}")
+        return name
 
-    def restore_live_prog(self, remote_path: str = "/data/gx/live_prog.bak_spidervip") -> None:
+    def list_receiver_snapshots(self) -> List[str]:
+        """Snapshot names on the box, newest first."""
+
         assert self._telnet is not None
-        self._telnet.run(f"cp -f {remote_path} /data/gx/live_prog; sync")
+        out = self._telnet.run(
+            f"cd {self._q(self.SNAP_ROOT)} 2>/dev/null && for d in snap_*; do "
+            '[ -f "$d/live_prog" ] && echo "$d"; done',
+            timeout=30.0,
+        )
+        names = [ln.strip() for ln in out.splitlines() if ln.strip().startswith("snap_")]
+        return sorted(set(names), reverse=True)
+
+    def prune_receiver_snapshots(self, keep_also: str = "") -> None:
+        """Keep the newest ``KEEP_SNAPSHOTS`` (plus ``keep_also``); delete older ``snap_*``."""
+
+        assert self._telnet is not None
+        keep = f' && [ "$d" != {self._q(keep_also)} ]' if keep_also else ""
+        self._telnet.run(
+            f"cd {self._q(self.SNAP_ROOT)} 2>/dev/null && ls -1d snap_* 2>/dev/null | sort -r | "
+            f"sed '1,{self.KEEP_SNAPSHOTS}d' | while read d; do "
+            f'[ -n "$d" ]{keep} && rm -rf "$d"; done',
+            timeout=60.0,
+        )
+
+    def restore_receiver_snapshot(self, name: str) -> None:
+        """Copy a snapshot's whole ``live_prog`` + ``enigma_db`` back.
+
+        The running app still holds the old DB in memory, so callers must
+        follow this with ``reboot(force=True)`` (no clean-shutdown write-back)
+        and must NOT call ``servicelistreload`` afterwards.
+        """
+
+        assert self._telnet is not None
+        name = self._check_snapshot_name(name)
+        d = f"{self.SNAP_ROOT}/{name}"
+        q = self._q
+        there = self._telnet.run(
+            f"[ -f {q(d + '/live_prog')} ] && [ -d {q(d + '/enigma_db')} ] && echo SNAP_THERE",
+            timeout=15.0,
+        )
+        if "SNAP_THERE" not in there:
+            raise RuntimeError(f"receiver snapshot missing or incomplete: {name}")
+        out = self._telnet.run(
+            f"cp -f {q(d + '/live_prog')} {q(self.LIVE_PROG)} && "
+            f"cp -rf {q(d + '/enigma_db')}/. {q(self.ENIGMA_DB)}/ && sync && "
+            f"cmp {q(d + '/live_prog')} {q(self.LIVE_PROG)} && echo RESTORE_OK",
+            timeout=120.0,
+        )
+        if "RESTORE_OK" not in out:
+            raise RuntimeError(f"live_prog restore failed: {out[-200:]}")
 
     def commit_service_list(self) -> str:
         """Ask bianbiang to re-read enigma_db exports and commit into ``live_prog``.
@@ -299,10 +393,11 @@ class LiveChannelReceiver:
         Tries the configured ``webif_port`` first, then the same fallbacks as
         Frequency deploy (80, 9095). Some lab boxes only expose WebIF on 9095.
 
-        Side effect: firmware also reimports ``satellites.xml`` and runs
-        ``MotorSettingReinit()``, which clears dish Motor/USALS to OFF.
-        Call :meth:`preserve_motor_from_backup` afterwards when a pre-reload
-        ``live_prog`` backup is available.
+        Side effect: firmware also reimports ``satellites.xml``. Whether this
+        touches dish Motor/USALS is unproven (``MotorSettingReinit`` in
+        ``bianbiang`` is only the antenna-menu init), so Apply asks the owner
+        to check the antenna/Motor menu and offers a whole-file rollback.
+        ``live_prog`` is compressed and is never patched byte-wise.
         """
 
         import urllib.error
@@ -333,184 +428,13 @@ class LiveChannelReceiver:
         detail = "; ".join(errors) if errors else (last_body[:200] or "no response")
         raise RuntimeError(f"servicelistreload failed (tried ports {ports}): {detail}")
 
-    def preserve_motor_from_backup(
-        self,
-        remote_backup: str = "/data/gx/live_prog.bak_spidervip",
-        *,
-        min_size_ratio: float = 0.95,
-    ) -> int:
-        """Restore per-sat Motor/USALS windows from ``remote_backup`` into live ``live_prog``.
-
-        Uploads the merge helper to the box and runs it there so large binaries
-        are not transferred. Does **not** call servicelistreload again.
-
-        ``min_size_ratio``: refuse merge if live_prog shrank below this fraction of
-        the backup (Favorites default 0.95). Frequency TP trims may pass ~0.25.
-        """
-
-        assert self._telnet is not None
-        import base64
-        from pathlib import Path
-
-        helper = Path(__file__).with_name("live_prog_motor.py").read_bytes()
-        runner = (
-            b"import sys\n"
-            b"from pathlib import Path\n"
-            b"sys.path.insert(0, '/tmp')\n"
-            b"from live_prog_motor import merge_live_prog_preserve_motor\n"
-            b"pre = Path(sys.argv[1]).read_bytes()\n"
-            b"post = Path('/data/gx/live_prog').read_bytes()\n"
-            b"merged, n = merge_live_prog_preserve_motor(pre, post)\n"
-            b"Path('/data/gx/live_prog').write_bytes(merged)\n"
-            b"print(n)\n"
-        )
-
-        def _write_b64(remote: str, data: bytes) -> None:
-            assert self._telnet is not None
-            payload = base64.b64encode(data).decode("ascii")
-            tmp_b64 = remote + ".b64"
-            self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
-            # 1800-char chunks (not 200) — tiny chunks made Frequency deploy hang
-            # for minutes uploading small helper scripts over Telnet.
-            for i in range(0, len(payload), 1800):
-                part = payload[i : i + 1800]
-                self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
-            self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
-
-        _write_b64("/tmp/live_prog_motor.py", helper)
-        _write_b64("/tmp/spidervip_motor_merge_run.py", runner)
-        safe_bak = remote_backup.replace("'", "'\\''")
-        # Refuse to merge when live_prog shrank badly after reload (corrupt import).
-        sizes = self._telnet.run(
-            f"wc -c /data/gx/live_prog '{safe_bak}' | awk '{{print $1}}'"
-        ).split()
-        if len(sizes) >= 2:
-            try:
-                live_sz, bak_sz = int(sizes[0]), int(sizes[1])
-            except ValueError:
-                live_sz = bak_sz = 0
-            ratio = float(min_size_ratio)
-            if bak_sz > 0 and live_sz < int(bak_sz * ratio):
-                raise RuntimeError(
-                    f"live_prog shrank after reload ({live_sz} < {ratio:.0%} of backup {bak_sz}); "
-                    "refusing motor merge to avoid further corruption"
-                )
-        out = self._telnet.run(
-            f"python3 /tmp/spidervip_motor_merge_run.py '{safe_bak}'; sync",
-            timeout=45.0,
-        )
-        try:
-            return int(out.strip().splitlines()[-1])
-        except Exception as exc:
-            raise RuntimeError(f"motor preserve failed: {out[:200]}") from exc
-
-    def pull_live_prog_bytes(self) -> bytes:
-        """Download ``/data/gx/live_prog`` via base64 over Telnet."""
-
-        assert self._telnet is not None
-        import base64
-        import re
-
-        encoded = self._telnet.run("base64 /data/gx/live_prog", timeout=180.0)
-        compact = "".join(encoded.split())
-        if not compact or not re.fullmatch(r"[A-Za-z0-9+/=]+", compact):
-            raise RuntimeError("failed to read live_prog as base64")
-        return base64.b64decode(compact)
-
-    def apply_motor_profile(
-        self,
-        profile: "MotorProfile | object",
-        *,
-        live_prog_backup: str = "/data/gx/live_prog.bak_spidervip",
-        min_size_ratio: float = 0.95,
-    ) -> Dict[str, object]:
-        """Restore Motor after Favorite commit using profile capture and/or backup."""
-
-        assert self._telnet is not None
-        import base64
-        import json
-        from pathlib import Path
-
-        from .motor_profile import MotorProfile
-
-        if not isinstance(profile, MotorProfile):
-            profile = MotorProfile.from_dict(profile)  # type: ignore[arg-type]
-        if not profile.enabled:
-            return {"method": "disabled", "restored": 0}
-
-        # Common path: no Pull-time capture — merge sat windows from pre-apply backup.
-        if not profile.has_capture:
-            restored = self.preserve_motor_from_backup(
-                live_prog_backup, min_size_ratio=min_size_ratio
-            )
-            return {"method": "pre_apply_backup", "restored": restored}
-
-        helper = Path(__file__).with_name("live_prog_motor.py").read_bytes()
-        profile_mod = Path(__file__).with_name("motor_profile.py").read_bytes()
-        profile_json = json.dumps(profile.to_dict()).encode("utf-8")
-        runner = (
-            b"import json, sys\n"
-            b"from pathlib import Path\n"
-            b"sys.path.insert(0, '/tmp')\n"
-            b"from motor_profile import MotorProfile, restore_motor_into_live_prog\n"
-            b"profile = MotorProfile.from_dict(json.loads(Path('/tmp/spidervip_motor_profile.json').read_text()))\n"
-            b"post = Path('/data/gx/live_prog').read_bytes()\n"
-            b"pre = Path(sys.argv[1]).read_bytes() if Path(sys.argv[1]).is_file() else None\n"
-            b"merged, method, n = restore_motor_into_live_prog(post_reload=post, pre_reload=pre, profile=profile)\n"
-            b"Path('/data/gx/live_prog').write_bytes(merged)\n"
-            b"print(method)\n"
-            b"print(n)\n"
-        )
-
-        def _write_b64(remote: str, data: bytes) -> None:
-            assert self._telnet is not None
-            payload = base64.b64encode(data).decode("ascii")
-            tmp_b64 = remote + ".b64"
-            self._telnet.run(f'rm -f "{remote}" "{tmp_b64}"')
-            for i in range(0, len(payload), 1800):
-                part = payload[i : i + 1800]
-                self._telnet.run(f"printf '%s' '{part}' >> \"{tmp_b64}\"")
-            self._telnet.run(f'base64 -d "{tmp_b64}" > "{remote}" && rm -f "{tmp_b64}"')
-
-        _write_b64("/tmp/live_prog_motor.py", helper)
-        _write_b64("/tmp/motor_profile.py", profile_mod)
-        _write_b64("/tmp/spidervip_motor_profile.json", profile_json)
-        _write_b64("/tmp/spidervip_motor_apply_run.py", runner)
-        safe_bak = live_prog_backup.replace("'", "'\\''")
-        sizes = self._telnet.run(
-            f"wc -c /data/gx/live_prog '{safe_bak}' 2>/dev/null | awk '{{print $1}}'"
-        ).split()
-        if len(sizes) >= 2:
-            try:
-                live_sz, bak_sz = int(sizes[0]), int(sizes[1])
-            except ValueError:
-                live_sz = bak_sz = 0
-            ratio = float(min_size_ratio)
-            if bak_sz > 0 and live_sz < int(bak_sz * ratio):
-                raise RuntimeError(
-                    f"live_prog shrank after reload ({live_sz} < {ratio:.0%} of backup {bak_sz}); "
-                    "refusing motor restore"
-                )
-        out = self._telnet.run(
-            f"python3 /tmp/spidervip_motor_apply_run.py '{safe_bak}'; sync",
-            timeout=45.0,
-        )
-        lines = [ln.strip() for ln in out.strip().splitlines() if ln.strip()]
-        if len(lines) < 2:
-            raise RuntimeError(f"motor profile apply failed: {out[:200]}")
-        try:
-            restored = int(lines[-1])
-        except ValueError as exc:
-            raise RuntimeError(f"motor profile apply failed: {out[:200]}") from exc
-        return {"method": lines[-2], "restored": restored}
-
     def restore_bouquet_files(self, files: Dict[str, str], *, commit: bool = False) -> None:
         """Write bouquet files back to enigma_db.
 
         ``commit=False`` by default: calling ``servicelistreload`` here would
-        reimport satellites.xml / run MotorSettingReinit and can destroy a
-        freshly restored ``live_prog`` backup. Apply rollback restores
-        ``live_prog`` separately and must not reload afterwards.
+        reimport the exports and overwrite a freshly restored ``live_prog``
+        snapshot. Apply rollback restores ``live_prog`` whole and must not
+        reload afterwards.
         """
 
         self.push_bouquet_files(files, staging=False)
@@ -519,10 +443,14 @@ class LiveChannelReceiver:
         if commit:
             self.commit_service_list()
 
-    def reboot(self) -> None:
+    def reboot(self, *, force: bool = False) -> None:
+        """Reboot the box. ``force=True`` (``reboot -f``) skips the app's clean
+        shutdown, so a just-restored ``live_prog`` is not overwritten from memory."""
+
         assert self._telnet is not None
+        cmd = "reboot -f" if force else "reboot"
         try:
-            self._telnet.run("sync; reboot", timeout=5.0)
+            self._telnet.run(f"sync; {cmd}", timeout=5.0)
         except Exception:
             pass
         self.close()

@@ -554,3 +554,25 @@ button:active {
     transform: none;
   }
 }
+
+/* ---- App SemVer badge (corner) ---- */
+.app-version {
+  position: fixed;
+  z-index: 40;
+  left: 12px;
+  bottom: 12px;
+  font-family: var(--sv-font-display, var(--sv-font));
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--sv-ink);
+  background: var(--sv-white, #fffef9);
+  border: 2px solid var(--sv-ink);
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  box-shadow: 2px 2px 0 var(--sv-ink);
+  pointer-events: none;
+  user-select: none;
+  direction: ltr;
+}
+

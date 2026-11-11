@@ -10,7 +10,7 @@ Unified local dashboard shell for SpiderVIP topics.
 ## Run
 
 ```powershell
-python -m pip install flask requests beautifulsoup4
+python -m pip install flask
 python -m spidervip.cli console --simulate
 # live:
 python -m spidervip.cli console --host 192.168.100.102
@@ -52,7 +52,6 @@ unless `--allow-remote` is passed (with a warning). Keep it on `127.0.0.1`.
 | Route | Timeout |
 |---|---|
 | `POST /channels/api/receiver/apply` | 600 s |
-| `POST /frequencies/send_to_receiver` | 120 s |
 | other POST/PUT/PATCH | 90 s |
 | GET | 60 s |
 
@@ -66,11 +65,12 @@ Other proxy failures return JSON with HTTP 502. `POST /api/connection` always
 answers JSON: if the Channels backend cannot take the new settings, it returns
 `saved: true, ok: false` with `channels.error`.
 
-## Frequency backend loading
+## Frequency backend
 
-`spidervip/frequency/app.py` is loaded by file path as module
-`spidervip_frequency_app`, so another top-level `app` module on `sys.path`
-cannot be picked up by mistake.
+The `/frequencies/` workspace is `spidervip.frequency.webapp.create_app()`, imported as a normal
+package. Its long operations (check, deploy, rollback) run as background jobs that the page polls
+via `/frequencies/api/job`, so they never hit the proxy timeouts above. See
+[`spidervip/frequency/README.md`](../frequency/README.md).
 
 ## Later
 

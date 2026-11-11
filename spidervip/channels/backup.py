@@ -125,11 +125,17 @@ def restore_backup(
     data: Dict[str, Any],
     *,
     replace_channels: bool = True,
+    rematch_by_name: bool = True,
 ) -> WorkspaceSnapshot:
-    """Apply a validated backup into the local workspace (not the receiver)."""
+    """Apply a validated backup into the local workspace (not the receiver).
+
+    After a factory reset + rescan, DVB service refs usually change. When the
+    workspace already has a live channel table (from Pull), favorites from the
+    backup are remapped onto those channels by identity, then by channel name.
+    """
 
     validate_backup(data)
-    channels = [Channel.from_dict(c) for c in data["channels"]]
+    backup_channels = [Channel.from_dict(c) for c in data["channels"]]
     favorites = []
     for fav in data["favorites"]:
         favorites.append(
@@ -139,15 +145,31 @@ def restore_backup(
                 channel_refs=[str(r) for r in fav.get("channel_refs", [])],
             )
         )
+    # Always keep backup names for later Apply rematch (survives Pull replacing channels).
+    manager.remember_channel_names(backup_channels)
+
     snap = manager.get_snapshot()
-    if replace_channels:
-        snap.channels = channels
+    current = list(snap.channels)
+
+    if rematch_by_name and current:
+        from .lamedb import rematch_favorites_by_name
+
+        rematched, _stats = rematch_favorites_by_name(
+            favorites,
+            name_channels=backup_channels + manager.name_channels_for_remap(),
+            target_channels=current,
+        )
+        snap.favorites = rematched
+        # Keep the live/pulled channel table; do not wipe it with stale backup refs.
+    elif replace_channels or not current:
+        snap.channels = backup_channels
+        snap.favorites = favorites
     else:
-        # keep existing channels, only restore favorites that map
         known = snap.channel_map()
         for fav in favorites:
             fav.channel_refs = [r for r in fav.channel_refs if r in known]
-    snap.favorites = favorites
+        snap.favorites = favorites
+
     snap.version = str(data.get("source", {}).get("workspace_version") or snap.version)
     snap.source = "backup-restore"
     manager.replace_snapshot(snap)

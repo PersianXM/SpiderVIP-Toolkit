@@ -231,6 +231,102 @@ def test_remove_channels_matches_alternate_ref_style(manager: FavoriteManager):
     assert manager.get_favorite("iran").channel_refs == []
 
 
+def test_rematch_favorites_by_name_after_rescan(manager: FavoriteManager):
+    """Factory-reset rescans change DVB refs; remap favorites by channel name."""
+    from spidervip.channels.lamedb import rematch_favorites_by_name, service_identity
+    from spidervip.channels.model import Channel, FavoriteList
+
+    old = Channel(
+        ref="1:0:1:111:1:1:420000:0:0:0:",
+        name="IRIB TV1 HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    new = Channel(
+        ref="1:0:1:999:2:1:420000:0:0:0:",
+        name="IRIB TV1 HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    assert service_identity(old.ref) != service_identity(new.ref)
+    favs = [FavoriteList(id="iran", name="IRAN", channel_refs=[old.ref])]
+    rematched, stats = rematch_favorites_by_name(
+        favs,
+        name_channels=[old],
+        target_channels=[new],
+    )
+    assert stats["name"] == 1
+    assert stats["unresolved"] == 0
+    assert rematched[0].channel_refs == [new.ref]
+
+
+def test_restore_backup_rematches_onto_pulled_channels(manager: FavoriteManager, tmp_path: Path):
+    from spidervip.channels.model import Channel, FavoriteList, WorkspaceSnapshot
+
+    live = Channel(
+        ref="1:0:1:AAA:1:1:420000:0:0:0:",
+        name="Press TV HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    manager.replace_snapshot(WorkspaceSnapshot(channels=[live], favorites=[]))
+    old = Channel(
+        ref="1:0:1:111:1:1:420000:0:0:0:",
+        name="Press TV HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    payload = {
+        "format": "spidervip.favorites.backup",
+        "format_version": 1,
+        "favorites": [{"id": "iran", "name": "IRAN", "channel_refs": [old.ref]}],
+        "channels": [old.to_dict()],
+    }
+    snap = restore_backup(manager, payload)
+    assert snap.channels[0].ref == live.ref
+    assert snap.favorites[0].channel_refs == [live.ref]
+
+
+def test_name_catalog_survives_channel_replace(manager: FavoriteManager):
+    from spidervip.channels.lamedb import rematch_favorites_by_name
+    from spidervip.channels.model import Channel, FavoriteList, WorkspaceSnapshot
+
+    old = Channel(
+        ref="1:0:1:111:1:1:420000:0:0:0:",
+        name="IRIB TV1 HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    live = Channel(
+        ref="1:0:1:999:2:1:420000:0:0:0:",
+        name="IRIB TV1 HD",
+        satellite="Türksat",
+        orbital_position="42.0E",
+        is_hd=True,
+    )
+    manager.replace_snapshot(
+        WorkspaceSnapshot(
+            channels=[old],
+            favorites=[FavoriteList(id="iran", name="IRAN", channel_refs=[old.ref])],
+        )
+    )
+    manager.remember_channel_names([old])
+    # Simulate Pull / Apply replacing the live table and wiping old refs.
+    manager.set_channels([live], source="receiver")
+    rematched, stats = rematch_favorites_by_name(
+        manager.list_favorites(),
+        name_channels=manager.name_channels_for_remap(),
+        target_channels=manager.list_channels(),
+    )
+    assert stats["name"] == 1
+    assert rematched[0].channel_refs == [live.ref]
+
+
 def test_favorite_crud_reorder_sort(manager: FavoriteManager):
     fav = manager.list_favorites()[0]
     chs = manager.list_channels()
@@ -302,12 +398,24 @@ def test_apply_success_on_simulator(manager: FavoriteManager):
     assert "reboot" in receiver.actions
 
 
-def test_apply_commits_into_live_prog_and_survives_reboot(manager: FavoriteManager):
+@pytest.fixture
+def no_sleep(monkeypatch):
+    """Apply/verify waits are real sleeps; skip them in these tests."""
+
+    monkeypatch.setattr("spidervip.channels.apply.time.sleep", lambda _s: None)
+
+
+def _reorder_first_favorite(manager: FavoriteManager) -> FavoriteList:
     fav = manager.list_favorites()[0]
     for ch in manager.list_channels()[:3]:
         manager.add_channel(fav.id, ch.ref)
     refs = manager.get_favorite(fav.id).channel_refs
     manager.reorder_channels(fav.id, list(reversed(refs)))
+    return manager.get_favorite(fav.id)
+
+
+def test_apply_commits_into_live_prog_and_survives_reboot(manager: FavoriteManager, no_sleep):
+    fav = _reorder_first_favorite(manager)
 
     # Even if reboot regenerates from master, commit updates the master first.
     receiver = SimulatedChannelReceiver(overwrite_on_reboot=True)
@@ -315,50 +423,234 @@ def test_apply_commits_into_live_prog_and_survives_reboot(manager: FavoriteManag
     assert report.status == OperationStatus.COMPLETED
     assert report.verified is True
     assert "commit_service_list" in receiver.actions
-    assert "apply_motor_profile" in receiver.actions
-    assert any("motor_restore" in s for s in report.steps)
     assert "reboot" in receiver.actions
     live = parse_bouquet_files(receiver.pull_bouquet_files())
     got = next(f for f in live if f.id == fav.id)
     assert got.channel_refs == manager.get_favorite(fav.id).channel_refs
 
 
-def test_motor_profile_capture_and_inject_roundtrip(tmp_path: Path):
-    from spidervip.channels.motor_profile import (
-        MotorProfile,
-        capture_windows_from_live_prog,
-        inject_captured_windows,
-    )
+def test_apply_takes_whole_snapshot_first_and_never_merges_motor(manager: FavoriteManager, no_sleep):
+    """live_prog is LZ-compressed: Apply snapshots it whole, never splices bytes."""
 
-    name = b"26.0E Ku-band Badr 4/5/6/7"
-    healthy = b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 64
-    wiped = b"\x00" * 32 + name + b"\x00\x00\x00\x00" + b"\x00" * 64
-    windows = capture_windows_from_live_prog(healthy, positions=["26.0E"])
-    assert windows
-    profile = MotorProfile(enabled=True, satellites=windows)
-    merged, n = inject_captured_windows(wiped, profile)
-    assert n == 1
-    assert b"\xaa\x01\x02\x03" in merged
+    _reorder_first_favorite(manager)
+    receiver = SimulatedChannelReceiver()
+    report = SafeApplyPipeline(manager, receiver).apply(reboot=True)
+    assert report.status == OperationStatus.COMPLETED
+    acts = receiver.actions
+    assert acts.index("snapshot_receiver_db") < acts.index("push_staged")
+    assert acts.index("push_staged") < acts.index("commit_service_list")
+    # No byte-window Motor restore step of any kind.
+    assert not any("motor" in a.lower() for a in acts)
+    assert not any(a.startswith("restore_snapshot") for a in acts)
+    assert report.receiver_snapshot in receiver.list_receiver_snapshots()
+    assert any(s.startswith("receiver_snapshot:") for s in report.steps)
+    assert any(s.startswith("motor_check:") for s in report.steps)
+    # Owner is told to check the antenna/Motor menu (Persian note).
+    assert "منوی آنتن" in report.notice
+    assert report.to_dict()["receiver_snapshot"] == report.receiver_snapshot
+    assert "prune_snapshots" in acts
 
+
+def test_apply_refuses_without_snapshot(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    receiver = SimulatedChannelReceiver(fail_snapshot=True)
+    before = receiver.pull_bouquet_files()
+    report = SafeApplyPipeline(manager, receiver).apply(reboot=True)
+    assert report.status == OperationStatus.FAILED
+    assert "snapshot" in report.message.lower()
+    assert "push_staged" not in receiver.actions
+    assert "commit_service_list" not in receiver.actions
+    assert receiver.pull_bouquet_files() == before
+
+
+class _RejectingCommitReceiver(SimulatedChannelReceiver):
+    """Box that 'commits' but keeps the old favorites (verify must fail)."""
+
+    def commit_service_list(self) -> str:
+        self.actions.append("commit_service_list")
+        self._live_files = dict(self._factory_files)
+        self._favorites = parse_bouquet_files(self._live_files)
+        # live_prog itself now holds something unexpected.
+        self._factory_files = {"bouquets.tv": "#NAME broken\n"}
+        return "<e2state>True</e2state>"
+
+
+def test_apply_verify_failure_rolls_back_whole_snapshot(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    receiver = _RejectingCommitReceiver()
+    before = receiver.pull_bouquet_files()
+    report = SafeApplyPipeline(manager, receiver).apply(reboot=True)
+    assert report.status == OperationStatus.FAILED
+    assert report.rolled_back is True
+    assert f"restore_snapshot:{report.receiver_snapshot}" in receiver.actions
+    # Restore is followed by a forced reboot, never by servicelistreload.
+    i = receiver.actions.index(f"restore_snapshot:{report.receiver_snapshot}")
+    tail = receiver.actions[i:]
+    assert "reboot_force" in tail
+    assert "commit_service_list" not in tail
+    assert receiver.pull_bouquet_files() == before
+    assert any("rollback_verify: favorites match" in s for s in report.steps)
+    assert "منوی آنتن" in report.notice
+
+
+def test_manual_rollback_to_snapshot(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    receiver = SimulatedChannelReceiver()
+    before = receiver.pull_bouquet_files()
+    pipeline = SafeApplyPipeline(manager, receiver)
+    applied = pipeline.apply(reboot=True)
+    assert applied.status == OperationStatus.COMPLETED
+    assert receiver.pull_bouquet_files() != before
+
+    assert applied.receiver_snapshot in pipeline.list_receiver_snapshots()
+    report = pipeline.rollback_to_snapshot(applied.receiver_snapshot)
+    assert report.status == OperationStatus.COMPLETED
+    assert report.rolled_back is True
+    assert receiver.pull_bouquet_files() == before
+    assert "reboot_force" in receiver.actions
+    # Current state was saved before rolling back, so the rollback is undoable.
+    assert report.receiver_snapshot.endswith("_before_rollback")
+    assert report.receiver_snapshot in receiver.list_receiver_snapshots()
+
+    missing = pipeline.rollback_to_snapshot("snap_19990101_000000")
+    assert missing.status == OperationStatus.FAILED
+    assert "not found" in missing.message
+
+
+def test_sim_prune_keeps_newest_snapshots():
+    rx = SimulatedChannelReceiver()
+    names = [rx.snapshot_receiver_db() for _ in range(5)]
+    rx.prune_receiver_snapshots(keep_also=names[0])
+    left = rx.list_receiver_snapshots()
+    assert left[:3] == list(reversed(names[2:]))
+    assert names[0] in left and names[1] not in left
+
+
+class _RecordingTelnet:
+    def __init__(self):
+        self.commands = []
+
+    def run(self, command: str, timeout: float = 60.0) -> str:  # noqa: ARG002
+        self.commands.append(command)
+        if command.startswith("df -k"):
+            return "500000\n"
+        if "SNAP_OK" in command:
+            return "SNAP_OK\n"
+        if "SNAP_THERE" in command:
+            return "SNAP_THERE\n"
+        if "RESTORE_OK" in command:
+            return "RESTORE_OK\n"
+        return ""
+
+    def close(self):
+        pass
+
+
+def test_live_receiver_snapshot_and_restore_copy_live_prog_whole():
+    from spidervip.channels.live_receiver import LiveChannelReceiver
+
+    rx = LiveChannelReceiver("10.0.0.9")
+    tel = _RecordingTelnet()
+    rx._telnet = tel  # type: ignore[assignment]
+    name = rx.snapshot_receiver_db()
+    assert name.startswith("snap_")
+    rx.restore_receiver_snapshot(name)
+    rx.reboot(force=True)
+    joined = "\n".join(tel.commands)
+    # Only whole-file copies + cmp; nothing that rewrites bytes inside live_prog.
+    assert f"cp -f '/data/gx/live_prog' '/data/spidervip_fav/{name}/live_prog'" in joined
+    assert f"cp -f '/data/spidervip_fav/{name}/live_prog' '/data/gx/live_prog'" in joined
+    assert "cmp " in joined
+    for bad in ("python", "printf", "write_bytes", "dd ", "live_prog_motor"):
+        assert bad not in joined
+    assert "reboot -f" in joined
+    # Byte-window Motor helpers are gone for good.
+    assert not hasattr(rx, "preserve_motor_from_backup")
+    assert not hasattr(rx, "apply_motor_profile")
+    with pytest.raises(ImportError):
+        import spidervip.channels.live_prog_motor  # noqa: F401
+
+
+def test_live_receiver_rejects_bad_snapshot_names():
+    from spidervip.channels.live_receiver import LiveChannelReceiver
+
+    rx = LiveChannelReceiver("10.0.0.9")
+    rx._telnet = _RecordingTelnet()  # type: ignore[assignment]
+    for bad in ("../etc", "snap_x; rm -rf /", "snap_20261111_120000/../../x", ""):
+        with pytest.raises(ValueError):
+            rx.restore_receiver_snapshot(bad)
+    assert rx._telnet.commands == []  # type: ignore[union-attr]
+
+
+def test_motor_profile_is_reference_only_and_roundtrips_legacy(tmp_path: Path):
+    from spidervip.channels import motor_profile as mp
+
+    legacy = {
+        "enabled": True,
+        "site_latitude": 35.7,
+        "site_longitude": 51.4,
+        "notes": "",
+        "satellites": [
+            {
+                "position": "26.0E",
+                "satellite_name": "26.0E Ku-band Badr",
+                "motor_type": "usals",
+                "captured_window_b64": "AAAA",
+                "captured_name_b64": "BBBB",
+                "capture_before": 16,
+                "capture_after": 48,
+            },
+            {"position": "42.0E", "motor_type": "off"},
+        ],
+        "captured_live_prog_b64": "",
+        "captured_live_prog_size": 0,
+    }
     mgr = FavoriteManager(tmp_path / "ws")
-    mgr.set_motor_profile(profile)
+    mgr.set_motor_profile(legacy)
     loaded = mgr.get_motor_profile()
-    assert loaded.has_capture
-    assert loaded.satellites[0].position == "26.0E"
+    assert loaded.to_dict()["satellites"][0]["captured_window_b64"] == "AAAA"
+    assert loaded.motored_positions() == ["26.0E"]
+    note = mp.motor_check_note(loaded)
+    assert "26.0E" in note and "42.0E" not in note
+    assert "منوی آنتن" in note
+    # The byte-splicing API no longer exists.
+    for gone in ("inject_captured_windows", "restore_motor_into_live_prog", "capture_windows_from_live_prog"):
+        assert not hasattr(mp, gone)
 
 
-def test_merge_live_prog_preserve_motor_restores_sat_window():
-    from spidervip.channels.live_prog_motor import merge_live_prog_preserve_motor
+def test_api_snapshots_and_rollback(manager: FavoriteManager, no_sleep):
+    from http.server import ThreadingHTTPServer
+    import threading
+    import urllib.request
 
-    name = b"26.0E Ku-band Badr 4/5/6/7"
-    # pre has motor marker 0xAA after the name; post was cleared to 0x00 by reload.
-    pre = b"\x00" * 32 + name + b"\xaa\x01\x02\x03" + b"\x00" * 96 + b"FAVPRE"
-    post = b"\x00" * 32 + name + b"\x00\x00\x00\x00" + b"\x00" * 96 + b"FAVPOST"
-    merged, n = merge_live_prog_preserve_motor(pre, post, before=8, after=8)
-    assert n == 1
-    assert name in merged
-    assert b"\xaa\x01\x02\x03" in merged
-    assert merged.endswith(b"FAVPOST")
+    _reorder_first_favorite(manager)
+    receiver = SimulatedChannelReceiver()
+    before = receiver.pull_bouquet_files()
+    app = ChannelApp(manager, receiver, simulate=True)
+    applied = app.pipeline.apply(reboot=False)
+    assert applied.status == OperationStatus.COMPLETED
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/receiver/snapshots", timeout=5) as resp:
+            names = json.loads(resp.read().decode())["snapshots"]
+        assert applied.receiver_snapshot in names
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/receiver/rollback",
+            data=json.dumps({"snapshot": applied.receiver_snapshot}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode())
+        assert payload["ok"] is True
+        assert payload["report"]["rolled_back"] is True
+        assert "منوی آنتن" in payload["report"]["notice"]
+        assert receiver.pull_bouquet_files() == before
+    finally:
+        server.shutdown()
 
 
 def test_favorites_to_bouquet_files_emits_simple_indices(manager: FavoriteManager):

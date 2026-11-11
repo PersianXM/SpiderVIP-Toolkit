@@ -175,6 +175,113 @@ def align_favorite_refs(
     return aligned
 
 
+def _norm_name(name: str) -> str:
+    return " ".join((name or "").casefold().split())
+
+
+def _channel_name_index(channels: Iterable[Channel]) -> Dict[str, List[Channel]]:
+    out: Dict[str, List[Channel]] = {}
+    for ch in channels:
+        key = _norm_name(ch.name)
+        if not key:
+            continue
+        out.setdefault(key, []).append(ch)
+    return out
+
+
+def _pick_by_name(
+    old: Channel,
+    candidates: List[Channel],
+) -> Optional[Channel]:
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    scored: List[Tuple[int, Channel]] = []
+    old_pos = (old.orbital_position or "").strip().casefold()
+    old_sat = (old.satellite or "").strip().casefold()
+    for ch in candidates:
+        score = 0
+        pos = (ch.orbital_position or "").strip().casefold()
+        sat = (ch.satellite or "").strip().casefold()
+        if old_pos and pos and old_pos == pos:
+            score += 3
+        if old_sat and sat and old_sat == sat:
+            score += 2
+        if bool(old.is_hd) == bool(ch.is_hd):
+            score += 1
+        scored.append((score, ch))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_score, best = scored[0]
+    # Require a discriminating signal when names collide.
+    if best_score <= 0:
+        return None
+    if len(scored) > 1 and scored[1][0] == best_score:
+        return None
+    return best
+
+
+def rematch_favorites_by_name(
+    favorites: List[FavoriteList],
+    *,
+    name_channels: List[Channel],
+    target_channels: List[Channel],
+) -> Tuple[List[FavoriteList], Dict[str, int]]:
+    """Remap favorite refs onto ``target_channels`` after a rescan.
+
+    1. Keep refs that still match by DVB service identity.
+    2. Otherwise look up the old channel name from ``name_channels`` and find a
+       unique (or satellite-disambiguated) name match in ``target_channels``.
+
+    Returns ``(favorites, stats)`` where stats has ``identity``, ``name``,
+    ``unresolved`` counts.
+    """
+
+    target_by_ref = {c.ref: c for c in target_channels}
+    target_by_id = build_identity_index(target_channels)
+    name_by_ref = {c.ref: c for c in name_channels}
+    name_by_id = build_identity_index(name_channels)
+    target_by_name = _channel_name_index(target_channels)
+
+    stats = {"identity": 0, "name": 0, "unresolved": 0}
+    out: List[FavoriteList] = []
+    for fav in favorites:
+        new_refs: List[str] = []
+        seen = set()
+        for ref in fav.channel_refs:
+            hit = resolve_channel(ref, target_by_ref, target_by_id)
+            if hit is not None:
+                stats["identity"] += 1
+                key = service_identity(hit.ref) or hit.ref
+                if key in seen:
+                    continue
+                seen.add(key)
+                new_refs.append(hit.ref)
+                continue
+
+            old = resolve_channel(ref, name_by_ref, name_by_id)
+            picked = None
+            if old is not None:
+                candidates = target_by_name.get(_norm_name(old.name), [])
+                picked = _pick_by_name(old, candidates)
+            if picked is not None:
+                stats["name"] += 1
+                key = service_identity(picked.ref) or picked.ref
+                if key in seen:
+                    continue
+                seen.add(key)
+                new_refs.append(picked.ref)
+            else:
+                stats["unresolved"] += 1
+                key = service_identity(ref) or ref
+                if key in seen:
+                    continue
+                seen.add(key)
+                new_refs.append(ref)
+        out.append(FavoriteList(id=fav.id, name=fav.name, channel_refs=new_refs))
+    return out, stats
+
+
 def parse_lamedb(text: str) -> List[Channel]:
     """Parse an Enigma2 ``lamedb`` (v4-style) into :class:`Channel` objects."""
 

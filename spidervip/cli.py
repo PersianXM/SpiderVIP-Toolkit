@@ -291,9 +291,17 @@ def _cmd_console(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from ._version import __version__
+
     parser = argparse.ArgumentParser(
         prog="spidervip",
         description="SpiderVIP toolkit: Console, A/V freeze, channels/favorites, and related tools.",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"spidervip {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

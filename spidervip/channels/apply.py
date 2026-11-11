@@ -1,4 +1,12 @@
-"""Safe favorite apply pipeline: stage → commit to live_prog → verify."""
+"""Safe favorite apply pipeline: snapshot → stage → commit to live_prog → verify.
+
+``/data/gx/live_prog`` is LZ-compressed, so this module never edits it
+byte-wise. It takes a whole-file snapshot (``live_prog`` + ``enigma_db``) on
+the box before the first write, and rollback copies that whole snapshot back
+followed by a forced reboot — the same model as ``spidervip/frequency/deploy.py``.
+Dish Motor/USALS is not touched; the owner is asked to check the antenna/Motor
+menu after Apply (see ``motor_profile.motor_check_note``).
+"""
 
 from __future__ import annotations
 
@@ -9,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from .bouquets import favorites_to_bouquet_files
+from .bouquets import favorites_to_bouquet_files, parse_bouquet_files
 from .manager import FavoriteManager
 from .model import ApplyReport, FavoriteList, OperationStatus
 from .receiver import ChannelReceiver
@@ -56,24 +64,82 @@ class SafeApplyPipeline:
             cb(status, message)
 
     def apply(self, *, reboot: bool = True, on_status: Optional[StatusCallback] = None) -> ApplyReport:
+        """Snapshot → upload → commit → verify → reboot → verify (whole-file rollback on failure).
+
+        ``live_prog`` is LZ-compressed, so it is never edited byte-wise: the
+        only writes to it are the firmware's own ``servicelistreload`` commit
+        and, on rollback, copying a whole snapshot back.
+        """
+
         if not self._lock.acquire(blocking=False):
             raise ApplyBusyError("Another apply operation is already in progress.")
         self._steps = []
         snapshot_path: Optional[Path] = None
+        receiver_snap: Optional[str] = None
         expected = self.manager.list_favorites()
-        live_prog_bak: Optional[str] = None
         try:
             self._set(OperationStatus.LOADING, "Connecting and reading receiver state", on_status)
             self.receiver.connect()
             status = self.receiver.get_status()
             live_files = self.receiver.pull_bouquet_files()
             channels = self.receiver.pull_channels()
+            before_favorites = parse_bouquet_files(live_files)
 
             self._set(OperationStatus.PREPARING, "Creating recovery snapshot of current favorites", on_status)
             snapshot_path = self._write_snapshot(live_files, status)
-            backup_live = getattr(self.receiver, "backup_live_prog", None)
-            if callable(backup_live):
-                live_prog_bak = backup_live()
+
+            self._set(
+                OperationStatus.VALIDATING,
+                "Rematching favorites onto live channel table (by identity, then name)",
+                on_status,
+            )
+            from .lamedb import rematch_favorites_by_name
+
+            name_channels = self.manager.name_channels_for_remap()
+            rematched, remap_stats = rematch_favorites_by_name(
+                expected,
+                name_channels=name_channels,
+                target_channels=channels,
+            )
+            if remap_stats["name"] or remap_stats["unresolved"] or remap_stats["identity"]:
+                self._steps.append(
+                    "remap: identity={identity} name={name} unresolved={unresolved}".format(
+                        **remap_stats
+                    )
+                )
+            cleaned, skipped = self._drop_unresolved_refs(
+                rematched,
+                live_channels=channels,
+                name_channels=name_channels,
+            )
+            if skipped:
+                sample = ", ".join(skipped[:8])
+                more = f" (+{len(skipped) - 8} more)" if len(skipped) > 8 else ""
+                self._steps.append(
+                    f"remap_skip: dropped {len(skipped)} channel(s) not found on "
+                    f"receiver after rescan: {sample}{more}"
+                )
+            if not any(fav.channel_refs for fav in cleaned):
+                raise ValueError(
+                    "Cannot apply: after rematching onto the live channel table, no "
+                    "favorite channels remain. Usually the backup names were lost — "
+                    "Restore the favorite backup again (names are kept in catalog), "
+                    "Pull from receiver, then Apply. Or rebuild the favorite from "
+                    "the new channel list."
+                )
+            # Keep names for any skipped/old refs before swapping to live table.
+            self.manager.remember_channel_names(name_channels)
+            snap = self.manager.get_snapshot()
+            snap.favorites = cleaned
+            # Prefer live channel table for subsequent local validation/UI.
+            snap.channels = list(channels)
+            snap.source = "apply-remap"
+            self.manager.replace_snapshot(snap)
+            expected = cleaned
+
+            self._set(OperationStatus.VALIDATING, "Validating channel mapping", on_status)
+            self._validate(expected)
+            self._validate_against_live(expected, channels)
 
             self._set(
                 OperationStatus.PREPARING,
@@ -86,8 +152,21 @@ class SafeApplyPipeline:
                 live_files=live_files,
             )
 
-            self._set(OperationStatus.VALIDATING, "Validating channel mapping", on_status)
-            self._validate(expected)
+            # Whole-file snapshot of live_prog + enigma_db on the box, taken
+            # right before the first write. No snapshot → no Apply.
+            self._set(
+                OperationStatus.PREPARING,
+                "Taking whole-file snapshot of live_prog + enigma_db on the receiver",
+                on_status,
+            )
+            take = getattr(self.receiver, "snapshot_receiver_db", None)
+            if not callable(take):
+                raise RuntimeError(
+                    "Receiver backend cannot take a whole-file live_prog snapshot "
+                    "(missing snapshot_receiver_db); Apply refused."
+                )
+            receiver_snap = str(take())
+            self._steps.append(f"receiver_snapshot: {receiver_snap} (whole live_prog + enigma_db)")
 
             self._set(OperationStatus.UPLOADING, "Uploading bouquet files to receiver enigma_db", on_status)
             self.receiver.push_bouquet_files(staged, staging=True)
@@ -106,86 +185,25 @@ class SafeApplyPipeline:
                     "Receiver backend cannot commit service list to live_prog "
                     "(missing commit_service_list)."
                 )
-            commit()
+            try:
+                commit()
+            except Exception:
+                # Put the previous exports back (no reload); live_prog untouched.
+                self._restore_exports_quietly(live_files)
+                raise
             time.sleep(2.0)
 
             self._set(OperationStatus.VERIFYING, "Verifying favorites after live_prog commit", on_status)
             ok = self._verify_stable(expected, attempts=2, gap=2.0)
             if not ok:
                 return self._rollback(
-                    live_files,
-                    live_prog_bak,
+                    receiver_snap,
+                    before_favorites,
                     snapshot_path,
                     on_status,
-                    reboot=False,
                     message=(
-                        "Favorites were uploaded but did not match after live_prog commit. "
-                        "Receiver state was rolled back."
+                        "Favorites were uploaded but did not match after live_prog commit."
                     ),
-                )
-
-            # servicelistreload also reimports satellites.xml and clears Motor/USALS
-            # (MotorSettingReinit). Restore from Motor profile capture and/or the
-            # pre-apply live_prog backup — never call reload again afterwards.
-            apply_motor = getattr(self.receiver, "apply_motor_profile", None)
-            preserve = getattr(self.receiver, "preserve_motor_from_backup", None)
-            profile = None
-            try:
-                profile = self.manager.get_motor_profile()
-                # Always restore Motor after Favorite commit; optional flag is ignored.
-                if profile is not None:
-                    profile.enabled = True
-            except Exception:
-                profile = None
-
-            if callable(apply_motor) and profile is not None:
-                self._set(
-                    OperationStatus.APPLYING,
-                    "Restoring dish Motor/USALS from dashboard profile / pre-apply backup",
-                    on_status,
-                )
-                try:
-                    result = apply_motor(profile, live_prog_backup=live_prog_bak or "")
-                    self._steps.append(
-                        f"motor_restore: method={result.get('method')} "
-                        f"windows={result.get('restored')}"
-                    )
-                except Exception as exc:
-                    self._steps.append(f"motor_restore_failed: {exc}")
-                self._set(
-                    OperationStatus.VERIFYING,
-                    "Re-verifying favorites after Motor restore",
-                    on_status,
-                )
-                ok = self._verify_stable(expected, attempts=2, gap=1.5)
-                if not ok:
-                    return self._rollback(
-                        live_files,
-                        live_prog_bak,
-                        snapshot_path,
-                        on_status,
-                        reboot=False,
-                        message=(
-                            "Motor restore changed receiver state and Favorites no longer match. "
-                            "Receiver state was rolled back."
-                        ),
-                    )
-            elif callable(preserve) and live_prog_bak:
-                # Simulator / backends without full profile apply.
-                self._set(
-                    OperationStatus.APPLYING,
-                    "Restoring dish Motor/USALS fields from pre-apply backup",
-                    on_status,
-                )
-                try:
-                    restored = preserve(live_prog_bak)
-                    self._steps.append(f"motor_preserve: restored {restored} satellite window(s)")
-                except Exception as exc:
-                    self._steps.append(f"motor_preserve_failed: {exc}")
-            else:
-                self._steps.append(
-                    "motor_note: save a Motor profile (Capture from receiver) so Apply "
-                    "can restore USALS after servicelistreload"
                 )
 
             if reboot:
@@ -195,7 +213,8 @@ class SafeApplyPipeline:
                 if not ready:
                     raise RuntimeError(
                         "Receiver did not become reachable again after reboot. "
-                        "Manual check required; recovery snapshot was saved."
+                        f"Manual check required; whole-file snapshot {receiver_snap} "
+                        "is on the receiver for rollback."
                     )
                 self._set(
                     OperationStatus.VERIFYING,
@@ -207,27 +226,143 @@ class SafeApplyPipeline:
                 ok = self._verify_stable(expected)
                 if not ok:
                     return self._rollback(
-                        live_files,
-                        live_prog_bak,
+                        receiver_snap,
+                        before_favorites,
                         snapshot_path,
                         on_status,
-                        reboot=True,
-                        message=(
-                            "Favorites committed but did not survive reboot verification. "
-                            "Receiver state was rolled back from the pre-apply snapshot."
-                        ),
+                        message="Favorites committed but did not survive reboot verification.",
                     )
 
+            self._prune_quietly()
+            notice = self._motor_notice()
+            self._steps.append(
+                "motor_check: Motor/USALS is not touched by Apply — check the "
+                "receiver's antenna/Motor menu; rollback snapshot: " + receiver_snap
+            )
             report = ApplyReport(
                 status=OperationStatus.COMPLETED,
                 message=(
                     "Favorites committed into live_prog"
                     + (" and verified after reboot." if reboot else ".")
+                    + " Check the antenna/Motor menu on the receiver."
                 ),
                 steps=list(self._steps),
                 verified=True,
                 rolled_back=False,
                 snapshot_path=str(snapshot_path) if snapshot_path else None,
+                receiver_snapshot=receiver_snap,
+                notice=notice,
+            )
+            self._set(OperationStatus.COMPLETED, report.message, on_status)
+            return report
+        except Exception as exc:
+            message = str(exc)
+            if receiver_snap and receiver_snap not in message:
+                message += (
+                    f" Whole-file snapshot {receiver_snap} is on the receiver; "
+                    "use rollback if the box is not as expected."
+                )
+            report = ApplyReport(
+                status=OperationStatus.FAILED,
+                message=message,
+                steps=list(self._steps),
+                verified=False,
+                rolled_back=False,
+                snapshot_path=str(snapshot_path) if snapshot_path else None,
+                receiver_snapshot=receiver_snap,
+                notice=self._motor_notice() if receiver_snap else "",
+            )
+            self._status = OperationStatus.FAILED
+            self._message = report.message
+            if on_status:
+                on_status(OperationStatus.FAILED, report.message)
+            return report
+        finally:
+            try:
+                self.receiver.close()
+            except Exception:
+                pass
+            self._lock.release()
+
+    # --- rollback ------------------------------------------------------------
+    def list_receiver_snapshots(self) -> List[str]:
+        """Whole-file snapshots on the receiver (newest first)."""
+
+        lister = getattr(self.receiver, "list_receiver_snapshots", None)
+        if not callable(lister):
+            return []
+        if not self._lock.acquire(blocking=False):
+            raise ApplyBusyError("Another apply operation is already in progress.")
+        try:
+            self.receiver.connect()
+            return list(lister())
+        finally:
+            try:
+                self.receiver.close()
+            except Exception:
+                pass
+            self._lock.release()
+
+    def rollback_to_snapshot(
+        self,
+        name: str,
+        *,
+        on_status: Optional[StatusCallback] = None,
+    ) -> ApplyReport:
+        """Manual rollback: put a snapshot's whole ``live_prog`` + ``enigma_db`` back.
+
+        The current state is snapshotted first (``…_before_rollback``), then the
+        box is force-rebooted so the app loads the restored file without
+        writing its in-memory DB back. ``servicelistreload`` is never called.
+        """
+
+        if not self._lock.acquire(blocking=False):
+            raise ApplyBusyError("Another apply operation is already in progress.")
+        self._steps = []
+        try:
+            self._set(OperationStatus.LOADING, "Connecting to receiver for rollback", on_status)
+            self.receiver.connect()
+            names = list(self.receiver.list_receiver_snapshots())
+            if name not in names:
+                raise ValueError(f"Receiver snapshot not found: {name}")
+            self._set(
+                OperationStatus.PREPARING,
+                "Saving current live_prog + enigma_db before rollback",
+                on_status,
+            )
+            pre = str(self.receiver.snapshot_receiver_db("_before_rollback"))
+            self._steps.append(f"receiver_snapshot: {pre} (state before rollback)")
+            self._set(
+                OperationStatus.APPLYING,
+                f"Restoring whole live_prog + enigma_db from {name}",
+                on_status,
+            )
+            self.receiver.restore_receiver_snapshot(name)
+            self._set(OperationStatus.REBOOTING, "Force-rebooting receiver to load restored live_prog", on_status)
+            self.receiver.reboot(force=True)
+            if not self.receiver.wait_until_ready():
+                raise RuntimeError(
+                    "Receiver did not become reachable again after the forced reboot. "
+                    f"Manual check required; pre-rollback state is in {pre}."
+                )
+            self._set(OperationStatus.VERIFYING, "Waiting for channel DB export to settle", on_status)
+            self._wait_for_post_boot_settle()
+            try:
+                self.receiver.prune_receiver_snapshots(keep_also=name)
+            except Exception:
+                pass
+            report = ApplyReport(
+                status=OperationStatus.COMPLETED,
+                message=(
+                    f"Receiver restored from snapshot {name} (whole live_prog). "
+                    f"State before rollback saved as {pre}. Pull from receiver to "
+                    "reload favorites into the workspace."
+                ),
+                steps=list(self._steps),
+                verified=False,
+                rolled_back=True,
+                receiver_snapshot=pre,
+                notice=self._motor_notice(),
             )
             self._set(OperationStatus.COMPLETED, report.message, on_status)
             return report
@@ -238,7 +373,6 @@ class SafeApplyPipeline:
                 steps=list(self._steps),
                 verified=False,
                 rolled_back=False,
-                snapshot_path=str(snapshot_path) if snapshot_path else None,
             )
             self._status = OperationStatus.FAILED
             self._message = report.message
@@ -254,50 +388,127 @@ class SafeApplyPipeline:
 
     def _rollback(
         self,
-        live_files: Dict[str, str],
-        live_prog_bak: Optional[str],
+        receiver_snap: str,
+        before_favorites: List[FavoriteList],
         snapshot_path: Optional[Path],
         on_status: Optional[StatusCallback],
         *,
-        reboot: bool,
         message: str,
     ) -> ApplyReport:
-        self._set(OperationStatus.APPLYING, "Rolling back receiver favorites", on_status)
-        # Restore bouquet text files first (no reload), then put live_prog back.
-        # Never call servicelistreload during rollback — it reimports satellites
-        # and can shrink/corrupt a restored live_prog backup.
+        """Automatic rollback after a failed verify: whole-file restore + forced reboot.
+
+        Always force-reboots (even for ``apply(reboot=False)``): the running
+        app keeps the new DB in memory and a clean shutdown could write it
+        back over the restored file. Never calls ``servicelistreload``.
+        """
+
+        self._set(
+            OperationStatus.APPLYING,
+            f"Rolling back: restoring whole live_prog + enigma_db from {receiver_snap}",
+            on_status,
+        )
+        restored = False
+        verified = False
         try:
-            restore_bq = getattr(self.receiver, "restore_bouquet_files", None)
-            if callable(restore_bq):
-                try:
-                    restore_bq(live_files, commit=False)
-                except TypeError:
-                    restore_bq(live_files)
-        except Exception:
-            pass
-        restore_lp = getattr(self.receiver, "restore_live_prog", None)
-        if live_prog_bak and callable(restore_lp):
-            try:
-                restore_lp(live_prog_bak)
-            except Exception:
-                pass
-        if reboot:
-            try:
-                self.receiver.reboot()
-                self.receiver.wait_until_ready()
-            except Exception:
-                pass
+            self.receiver.restore_receiver_snapshot(receiver_snap)
+            restored = True
+            self._set(OperationStatus.REBOOTING, "Force-rebooting receiver to load restored live_prog", on_status)
+            self.receiver.reboot(force=True)
+            if self.receiver.wait_until_ready():
+                self._wait_for_post_boot_settle()
+                verified = bool(self.receiver.verify_favorites(before_favorites))
+                self._steps.append(
+                    "rollback_verify: " + ("favorites match pre-apply state" if verified
+                                           else "favorites differ from pre-apply state")
+                )
+            else:
+                self._steps.append("rollback_verify: receiver not reachable after forced reboot")
+        except Exception as exc:
+            self._steps.append(f"rollback_failed: {exc}")
+        if restored:
+            message += (
+                f" Receiver live_prog was restored whole from {receiver_snap}"
+                + (" and verified." if verified else "; please check the receiver.")
+            )
+        else:
+            message += (
+                f" Automatic rollback did not complete; snapshot {receiver_snap} "
+                "is still on the receiver — use rollback."
+            )
         report = ApplyReport(
             status=OperationStatus.FAILED,
             message=message,
             steps=list(self._steps),
             verified=False,
-            rolled_back=True,
+            rolled_back=restored,
             snapshot_path=str(snapshot_path) if snapshot_path else None,
+            receiver_snapshot=receiver_snap,
+            notice=self._motor_notice(),
         )
         self._status = OperationStatus.FAILED
         self._message = report.message
         return report
+
+    def _restore_exports_quietly(self, live_files: Dict[str, str]) -> None:
+        restore_bq = getattr(self.receiver, "restore_bouquet_files", None)
+        if not callable(restore_bq):
+            return
+        try:
+            try:
+                restore_bq(live_files, commit=False)
+            except TypeError:
+                restore_bq(live_files)
+        except Exception:
+            pass
+
+    def _prune_quietly(self) -> None:
+        prune = getattr(self.receiver, "prune_receiver_snapshots", None)
+        if callable(prune):
+            try:
+                prune()
+            except Exception:
+                pass
+
+    def _motor_notice(self) -> str:
+        from .motor_profile import motor_check_note
+
+        try:
+            profile = self.manager.get_motor_profile()
+        except Exception:
+            profile = None
+        return motor_check_note(profile)
+
+    def _drop_unresolved_refs(
+        self,
+        favorites: List[FavoriteList],
+        *,
+        live_channels: List,
+        name_channels: List,
+    ) -> tuple:
+        """Keep only refs that exist on the live receiver; return (favorites, skipped labels)."""
+
+        from .lamedb import build_identity_index, resolve_channel
+        from .model import Channel
+
+        live_list = [c for c in live_channels if isinstance(c, Channel)]
+        name_list = [c for c in name_channels if isinstance(c, Channel)]
+        live_by_ref = {c.ref: c for c in live_list}
+        live_by_id = build_identity_index(live_list)
+        name_by_ref = {c.ref: c for c in name_list}
+        name_by_id = build_identity_index(name_list)
+
+        cleaned: List[FavoriteList] = []
+        skipped: List[str] = []
+        for fav in favorites:
+            keep: List[str] = []
+            for ref in fav.channel_refs:
+                if resolve_channel(ref, live_by_ref, live_by_id) is not None:
+                    keep.append(ref)
+                    continue
+                old = resolve_channel(ref, name_by_ref, name_by_id)
+                skipped.append(old.name if old is not None else ref)
+            cleaned.append(FavoriteList(id=fav.id, name=fav.name, channel_refs=keep))
+        return cleaned, skipped
 
     def _validate(self, favorites: List[FavoriteList]) -> None:
         from .lamedb import build_identity_index, resolve_channel
@@ -315,6 +526,49 @@ class SafeApplyPipeline:
                 f"Cannot apply: {len(missing)} favorite channel(s) are missing from "
                 f"the local channel list (e.g. {sample}). Pull channels from the "
                 f"receiver or restore a complete backup first."
+            )
+
+    def _validate_against_live(
+        self,
+        favorites: List[FavoriteList],
+        live_channels: List,
+    ) -> None:
+        """``.simple`` indices must resolve against the live receiver lamedb."""
+
+        from .lamedb import build_identity_index, resolve_channel, service_identity
+        from .model import Channel
+
+        live_list = [c for c in live_channels if isinstance(c, Channel)]
+        live_by_ref = {c.ref: c for c in live_list}
+        live_by_id = build_identity_index(live_list)
+        problems: List[str] = []
+        for fav in favorites:
+            missing_names: List[str] = []
+            seen = set()
+            for ref in fav.channel_refs:
+                key = service_identity(ref)
+                if key is not None and key in seen:
+                    continue
+                if key is not None:
+                    seen.add(key)
+                if resolve_channel(ref, live_by_ref, live_by_id) is not None:
+                    continue
+                ws = self.manager.find_channel(ref)
+                missing_names.append(ws.name if ws is not None else ref)
+            if missing_names:
+                sample = ", ".join(missing_names[:5])
+                more = f" (+{len(missing_names) - 5} more)" if len(missing_names) > 5 else ""
+                problems.append(
+                    f"favorite '{fav.name}': {len(missing_names)} missing on receiver "
+                    f"(e.g. {sample}{more})"
+                )
+        if problems:
+            detail = "; ".join(problems[:3])
+            raise ValueError(
+                f"Cannot build .simple indices — channels in the workspace favorite "
+                f"are not in the live receiver channel table. {detail}. "
+                f"Usually after a frequency/TP change: Pull from receiver, remove "
+                f"channels marked unresolved from the favorite, then Apply again."
             )
 
     def _wait_for_post_boot_settle(self, *, timeout: float = 90.0, stable_for: float = 6.0) -> None:

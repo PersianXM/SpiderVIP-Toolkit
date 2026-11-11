@@ -12,7 +12,7 @@
 | مسیر UI | موضوع |
 |---|---|
 | `/` | پوسته + پنل اتصال مشترک |
-| `/frequencies/` | مدیریت فرکانس |
+| `/frequencies/` | به‌روزرسانی فرکانس (همهٔ ماهواره‌ها) |
 | `/channels/` | کانال و Favorite |
 
 API اتصال: `GET/POST /api/connection` ، `POST /api/connection/probe` ، `GET /api/version`

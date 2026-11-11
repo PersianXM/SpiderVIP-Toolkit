@@ -155,7 +155,7 @@ patchهای متناظر:
 
 - `spidervip/freeze/` — تشخیص/تعمیر فریز A/V؛
 - `spidervip/channels/` — مدیریت کانال و Favorite؛
-- `spidervip/frequency/` — مدیریت فرکانس (Frequency Manager)؛
+- `spidervip/frequency/` — به‌روزرسانی فرکانس همهٔ ماهواره‌ها (منبع OpenPLi/LyngSat)؛
 - `spidervip/console/` — پوستهٔ واحد **SpiderVIP Console** (فاز ۱).
 
 ### `patches/`
@@ -173,8 +173,7 @@ patchهای متناظر:
 - `probe_checksum*.py`, `crack_checksum.py`
 - `telnet_probe.py`, `telnet_run.py` و ابزارهای deployment
 - `freeze_state.py` (عکس لحظه فریز)، `blackbox_record.py` (ضبط مداوم)، `deploy_audio_watch.py` + `audio_watch.sh` (نگهبان فریز روی رسیور)
-- scraper و generator داده‌های transponder
-- تست `test_lyngsat_parse.py`
+- `extract_satellites.py` (گزارش ماهواره/TP از firmware)
 
 برخی ابزارها محصول تحقیق تعاملی‌اند و ممکن است نام فایل، IP یا مسیر پیش‌فرض
 داشته باشند. اجرای آن‌ها باید پس از بازبینی ورودی‌ها انجام شود.
@@ -202,16 +201,12 @@ patchهای متناظر:
 
 ## ۶. بازتولید و اعتبارسنجی
 
-پیش‌نیاز عمومی: Python 3. برای scraper:
+پیش‌نیاز عمومی: Python 3. برای کنسول و به‌روزرسانی فرکانس: `python -m pip install flask`.
+
+تست‌ها:
 
 ```powershell
-python -m pip install requests beautifulsoup4
-```
-
-تست‌های مستقل:
-
-```powershell
-python tools/test_lyngsat_parse.py
+python -m pytest -q
 ```
 
 workflow تحلیل offline، پس از قراردادن قانونی image در workspace محلی:

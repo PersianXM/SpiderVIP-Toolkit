@@ -29,6 +29,12 @@ class FavoriteManager:
     def snapshot_path(self) -> Path:
         return self.workspace_dir / "workspace.json"
 
+    @property
+    def name_catalog_path(self) -> Path:
+        """Persistent ref/name table used to rematch favorites after a rescan."""
+
+        return self.workspace_dir / "name_catalog.json"
+
     def _load(self) -> None:
         path = self.snapshot_path
         if path.is_file():
@@ -41,6 +47,69 @@ class FavoriteManager:
                 json.dumps(self._snapshot.to_dict(), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+
+    def remember_channel_names(self, channels: Iterable[Channel]) -> None:
+        """Merge channels into the durable name catalog (safe across Pull/Apply)."""
+
+        from .lamedb import service_identity
+
+        with self._lock:
+            existing = self._load_name_catalog_unlocked()
+            by_key: Dict[str, Channel] = {}
+            for ch in existing:
+                key = self._catalog_key(ch.ref, service_identity(ch.ref))
+                by_key[key] = ch
+            for ch in channels:
+                if not (ch.name or "").strip():
+                    continue
+                key = self._catalog_key(ch.ref, service_identity(ch.ref))
+                by_key[key] = Channel.from_dict(ch.to_dict())
+            payload = [c.to_dict() for c in by_key.values()]
+            self.name_catalog_path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+    def list_name_catalog(self) -> List[Channel]:
+        with self._lock:
+            return self._load_name_catalog_unlocked()
+
+    def name_channels_for_remap(self) -> List[Channel]:
+        """Workspace channels plus durable catalog — used only for name lookup."""
+
+        with self._lock:
+            merged: Dict[str, Channel] = {}
+            from .lamedb import service_identity
+
+            for ch in list(self._snapshot.channels) + self._load_name_catalog_unlocked():
+                key = self._catalog_key(ch.ref, service_identity(ch.ref))
+                # Prefer entries that already have a human name.
+                prev = merged.get(key)
+                if prev is None or (not (prev.name or "").strip() and (ch.name or "").strip()):
+                    merged[key] = Channel.from_dict(ch.to_dict())
+            return list(merged.values())
+
+    @staticmethod
+    def _catalog_key(ref: str, identity) -> str:
+        if identity is not None:
+            return "id:" + ":".join(f"{part:x}" for part in identity)
+        return "ref:" + (ref or "")
+
+    def _load_name_catalog_unlocked(self) -> List[Channel]:
+        path = self.name_catalog_path
+        if not path.is_file():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(data, list):
+            return []
+        out: List[Channel] = []
+        for item in data:
+            if isinstance(item, dict) and item.get("ref"):
+                out.append(Channel.from_dict(item))
+        return out
 
     def replace_snapshot(self, snapshot: WorkspaceSnapshot, *, persist: bool = True) -> None:
         with self._lock:
@@ -60,6 +129,9 @@ class FavoriteManager:
                 if not ch.number:
                     ch.number = i
                 numbered.append(ch)
+            # Remember names before replacing the live table (factory-reset rematch).
+            self.remember_channel_names(numbered)
+            self.remember_channel_names(self._snapshot.channels)
             self._snapshot.channels = list(numbered)
             self._snapshot.source = source
             self.save()
