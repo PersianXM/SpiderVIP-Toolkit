@@ -53,6 +53,7 @@ def protected_indexes(sat: satxml.Satellite, channel_tps: List[_lamedb.LameTp]) 
 
 
 def build(box_data: bytes, src_data: bytes, *, lamedb_data: Optional[bytes] = None,
+          delete_channel_tps: bool = False,
           source_info: Optional[Dict[str, object]] = None,
           warnings: Optional[List[str]] = None) -> Dict[str, object]:
     """``lamedb_data``: the box's lamedb; TPs carrying channels are protected.
@@ -88,7 +89,8 @@ def build(box_data: bytes, src_data: bytes, *, lamedb_data: Optional[bytes] = No
             unmatched.append(base)
             continue
         ss = src[p.src_index]
-        rows = _diff.compare(bs, ss, p.band, protected_indexes(bs, channel_tps))
+        rows = _diff.compare(bs, ss, p.band, protected_indexes(bs, channel_tps),
+                             delete_channel_tps=delete_channel_tps)
         c = _diff.counts(rows)
         gone_ratio = c["gone"] / len(bs.tps) if bs.tps else 0.0
         guard_ok = len(ss.tps) >= GUARD_MIN_SRC and gone_ratio <= GUARD_MAX_GONE_RATIO
@@ -114,8 +116,10 @@ def build(box_data: bytes, src_data: bytes, *, lamedb_data: Optional[bytes] = No
                 "box": _tp_view(r.box),
                 "src": _tp_view(r.src),
                 "src_attrs": dict(r.src.attrs) if r.src is not None else None,
+                "box_attrs": dict(r.box.attrs) if r.box is not None else None,
                 "changes": {k: [v[0], v[1]] for k, v in r.changes.items()},
                 "note": r.note,
+                "channels": r.channels,
                 "default": default,
             })
         for k in ("same", "changed", "new", "gone", "skipped", "protected"):
@@ -163,6 +167,26 @@ def all_row_ids(plan: Dict[str, object]) -> Set[str]:
 
 def default_selection(plan: Dict[str, object]) -> Set[str]:
     return {r["id"] for s in plan["sats"] for r in s["rows"] if r["default"]}
+
+
+def full_selection(plan: Dict[str, object]) -> Set[str]:
+    """Every change, every new TP and every TP missing from the source (owner's
+    policy for the automatic on-box update, 2026-11-11)."""
+
+    return all_row_ids(plan)
+
+
+def deleted_channel_tps(plan: Dict[str, object], selected: Iterable[str]):
+    """``(position, freq_khz, pol, sr)`` of selected deletions that carry channels."""
+
+    chosen = set(selected)
+    out = []
+    for s in plan["sats"]:
+        for r in s["rows"]:
+            if r["id"] in chosen and r["kind"] == "gone" and r.get("channels"):
+                b = r["box_attrs"]
+                out.append((s["position"], int(b["frequency"]), b["polarization"], int(b["symbol_rate"])))
+    return out
 
 
 def _new_tp_attrs(src_attrs: Dict[str, str]) -> Dict[str, str]:

@@ -41,7 +41,7 @@ def test_registry_has_watchdog_and_frequency_patch():
     assert "/data/spidervip_freq_auto/freqcore/plan.py" in remotes
     assert "/data/spidervip_freq_auto/freqcore/__init__.py" in remotes
     gen = fa.generated()
-    assert gen["/data/spidervip_freq_auto/interval_s"] == b"6220800\n"
+    assert gen["/data/spidervip_freq_auto/interval_s"] == b"604800\n"
     assert WATCHDOG.files[0].local.is_file()
     # Hook line must match the older installer so both stay compatible.
     assert WATCHDOG.hook_line == "sh /data/audio_watch/audio_watch.sh >/dev/null 2>&1 &  # audio_watch"
@@ -121,6 +121,156 @@ def _synthetic_lists(tmp_path: Path):
     (tmp_path / "lamedb").write_text("eDVB services /4/\ntransponders\nend\nservices\nend\n", encoding="utf-8")
 
 
+FA_LAMEDB = """eDVB services /4/
+transponders
+000a0000:0001:0001
+\ts 12500000:27500000:0:3:10:0:0:1:2
+/
+000a0000:0002:0001
+\ts 10700000:27500000:0:3:10:0:0:1:2
+/
+end
+services
+0064:000a0000:0001:0001:1:0
+Gone Channel
+p:X
+0065:000a0000:0002:0001:1:0
+Kept Channel
+p:X
+end
+"""
+FA_FAV = ("#NAME Fav\n#SERVICE 1:0:1:64:1:1:A0000:0:0:0::0:0:0:0\n#DESCRIPTION Gone Channel\n"
+          "#SERVICE 1:0:1:65:2:1:A0000:0:0:0::0:0:0:0\n")
+
+
+def _fake_box(tmp_path: Path):
+    """A receiver on disk: enigma_db, live_prog with Motor on Box1, snapshots dir."""
+
+    import os
+
+    from spidervip.frequency.core import liveprog
+
+    _synthetic_lists(tmp_path)
+    en = tmp_path / "enigma_db"
+    en.mkdir()
+    sat = (tmp_path / "sat.xml").read_text(encoding="utf-8")
+    # Box1 (position 10) also has 12500 H (channels, gone from the source) and 12600 V (no channels, gone).
+    sat = sat.replace('<sat name="1.0E Box1" flags="0" position="10">',
+                      '<sat name="1.0E Box1" flags="0" position="10">\n'
+                      '    <transponder frequency="12500000" symbol_rate="27500000" polarization="0" fec_inner="3" '
+                      'system="1" modulation="2" mts="0" plsN="0"/>\n'
+                      '    <transponder frequency="12600000" symbol_rate="27500000" polarization="1" fec_inner="3" '
+                      'system="1" modulation="2" mts="0" plsN="0"/>')
+    (en / "satellites.xml").write_text(sat, encoding="utf-8", newline="\n")
+    (en / "lamedb").write_text(FA_LAMEDB, encoding="utf-8", newline="\n")
+    (en / "userbouquet.1.tv").write_text(FA_FAV, encoding="utf-8", newline="\n")
+    raw = bytearray(400)
+    for i in range(3):
+        name = f"{i}.0E Box{i}".encode()
+        raw[i * 52:i * 52 + len(name)] = name
+        raw[i * 52 + 32] = 0x59 if i == 1 else 0x51
+        raw[i * 52 + 50] = 0xFF
+    (tmp_path / "live_prog").write_bytes(liveprog.pack(bytes(raw)))
+    d = _box_layout(tmp_path)
+    env = dict(os.environ, FA_DIR=str(d), FA_ENIGMA=str(en), FA_LIVE_PROG=str(tmp_path / "live_prog"),
+               FA_SNAP_ROOT=str(tmp_path / "snaps"), FA_RELOAD_URLS="fake://", FA_REBOOT_CMD="exit 0",
+               FA_SOURCE_FILE=str(tmp_path / "src.xml"))
+    env.pop("PYTHONPATH", None)
+    return d, en, env
+
+
+def _runner(d, env, mode):
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-I", str(d / "runner.py"), mode], env=env, capture_output=True,
+                         text=True, timeout=180)
+    return out.returncode, out.stdout + out.stderr
+
+
+def test_runner_apply_then_verify_on_fake_box(tmp_path: Path):
+    from spidervip.frequency.core import liveprog, satxml
+
+    d, en, env = _fake_box(tmp_path)
+    rc, out = _runner(d, env, "apply")
+    assert rc == 0, out
+    pending = json.loads((d / "pending.json").read_text(encoding="utf-8"))
+    assert pending["stage"] == "applied" and pending["channel_tps_removed"] == 0
+    assert pending["channels_removed"] == 0 and pending["favorite_entries_removed"] == 0
+    assert pending["motor_restored"] == ["1.0E Box1"]
+    cand = pending["report"]["candidates"]
+    assert cand["tps"] == [{"sat": "1.0E Box1", "freq": 12500, "pol": "H", "sr": 27500}]
+    assert cand["channels"] == ["Gone Channel"]
+    box1 = [s for s in satxml.parse((en / "satellites.xml").read_bytes()) if s.position == 10][0]
+    freqs = {t.freq_khz for t in box1.tps}
+    # Method 1: the channel TP (12500 H) stays; the TP without channels (12600 V) goes.
+    assert 12500000 in freqs and 12600000 not in freqs and len(box1.tps) == 16
+    assert (en / "lamedb").read_text(encoding="utf-8") == FA_LAMEDB
+    assert (en / "userbouquet.1.tv").read_text(encoding="utf-8") == FA_FAV
+    raw = liveprog.unpack((tmp_path / "live_prog").read_bytes())
+    assert liveprog.motor_map(raw) == {"1.0E Box1": (0x08, 0xFF)}     # cleared by "reload", restored
+    assert (d / "last_run").exists()
+    snaps = list((tmp_path / "snaps").iterdir())
+    assert len(snaps) == 1 and (snaps[0] / "enigma_db" / "lamedb").read_text(encoding="utf-8") == FA_LAMEDB
+
+    rc, out = _runner(d, env, "verify")
+    assert rc == 0, out
+    assert not (d / "pending.json").exists()
+    rep = json.loads((d / "last_report.json").read_text(encoding="utf-8"))
+    assert rep["result"] == "applied" and rep["channels_removed"] == 0 and rep["channels_after"] == 2
+
+
+def test_runner_verify_failure_rolls_back_once(tmp_path: Path):
+    from spidervip.frequency.core import liveprog
+
+    d, en, env = _fake_box(tmp_path)
+    original_sat = (en / "satellites.xml").read_bytes()
+    original_lp = (tmp_path / "live_prog").read_bytes()
+    assert _runner(d, env, "apply")[0] == 0
+    # The "box" came up with a different list than planned.
+    (en / "satellites.xml").write_bytes(original_sat.replace(b'frequency="10700000"', b'frequency="10701000"', 1))
+    rc, out = _runner(d, env, "verify")
+    assert rc == 2, out
+    pending = json.loads((d / "pending.json").read_text(encoding="utf-8"))
+    assert pending["stage"] == "rolled_back" and "TP list differs" in pending["problems"][0]
+    assert (en / "satellites.xml").read_bytes() == original_sat
+    assert (en / "lamedb").read_text(encoding="utf-8") == FA_LAMEDB
+    assert (tmp_path / "live_prog").read_bytes() == original_lp
+    rc, out = _runner(d, env, "verify")                   # the boot after the rollback
+    assert rc == 0, out
+    rep = json.loads((d / "last_report.json").read_text(encoding="utf-8"))
+    assert rep["result"] == "rolled_back" and rep["rollback_ok"] is True
+    assert not (d / "pending.json").exists()
+    assert liveprog.motor_map(liveprog.unpack((tmp_path / "live_prog").read_bytes())) == {"1.0E Box1": (8, 255)}
+
+
+def test_runner_skips_apply_while_verification_pending(tmp_path: Path):
+    d, en, env = _fake_box(tmp_path)
+    assert _runner(d, env, "apply")[0] == 0
+    rc, out = _runner(d, env, "apply")
+    assert rc == 3 and "waiting for verification" in out
+
+
+def test_runner_candidate_names_neighbouring_satellite(tmp_path: Path):
+    """A channel TP stored under one satellite but listed on a neighbour in the source
+    (Es'hail 1 25.5E TPs scanned under Badr 26.0E, 2026-11-11) is labelled, not deleted."""
+
+    d, en, env = _fake_box(tmp_path)
+    src = (tmp_path / "src.xml").read_text(encoding="utf-8")
+    src = src.replace("</satellites>", '  <sat name="0.5E Neighbour" flags="0" position="5">\n'
+                      '    <transponder frequency="12501500" symbol_rate="30000000" polarization="2" '
+                      'fec_inner="3" system="1" modulation="2"/>\n  </sat>\n</satellites>')
+    (tmp_path / "src.xml").write_text(src, encoding="utf-8", newline="\n")
+    before = (en / "satellites.xml").read_bytes()
+    rc, out = _runner(d, env, "report")
+    assert rc == 0, out
+    cand = json.loads((d / "last_report.json").read_text(encoding="utf-8"))["candidates"]
+    assert cand["tps"] == [{"sat": "1.0E Box1", "freq": 12500, "pol": "H", "sr": 27500,
+                            "nearby": [{"sat": "0.5E Neighbour", "position": "0.5E", "freq": 12501,
+                                        "pol": "H", "sr": 30000}]}]
+    assert (en / "satellites.xml").read_bytes() == before
+
+
 def test_runner_report_only_on_box_layout(tmp_path: Path):
     import subprocess
     import sys
@@ -158,22 +308,37 @@ def test_loop_runs_once_then_waits_for_interval(tmp_path: Path):
     (d / "interval_s").write_text("999999\n")
     (d / "min_epoch").write_text("0\n")
     fake_py = tmp_path / "fakepy.sh"
-    fake_py.write_text("#!/bin/sh\necho ran >> \"$FA_DIR/runs\"\nexit 0\n", newline="\n")
-    env = dict(__import__("os").environ, FA_DIR=str(d).replace("\\", "/"), FA_PROC=str(proc_dir).replace("\\", "/"),
-               FA_CHECK="1", FA_PY=f"sh {str(fake_py).replace(chr(92), '/')}")
-    p = subprocess.Popen([sh, str(d / "loop.sh").replace("\\", "/")], env=env,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        time.sleep(4)
-    finally:
-        p.kill()
-        p.wait(timeout=10)
-    runs = (d / "runs").read_text().split()
-    assert runs == ["ran"]                               # once, then waits for the interval
+    fake_py.write_text("#!/bin/sh\necho \"ran $2\" >> \"$FA_DIR/runs\"\nexit 0\n", newline="\n")
+    base = dict(__import__("os").environ, FA_DIR=str(d).replace("\\", "/"), FA_PROC=str(proc_dir).replace("\\", "/"),
+                FA_CHECK="1", FA_SETTLE="0", FA_RETRY="0", FA_PY=f"sh {str(fake_py).replace(chr(92), '/')}")
+
+    def run_loop(**extra):
+        p = subprocess.Popen([sh, str(d / "loop.sh").replace("\\", "/")], env=dict(base, **extra),
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(4)
+        finally:
+            p.kill()
+            p.wait(timeout=10)
+        runs = (d / "runs").read_text().splitlines() if (d / "runs").exists() else []
+        (d / "runs").unlink(missing_ok=True)
+        return runs
+
+    assert run_loop() == ["ran report"]                  # report mode: once, then waits for the interval
     assert (d / "last_run").read_text().strip().isdigit()
     log = (d / "log").read_text()
-    assert "start (report-only)" in log and "run end rc=0" in log
+    assert "start mode=report" in log and "run end rc=0" in log
     assert (d / "pid").read_text().split()[1] == "boot-1"
+
+    (d / "last_run").unlink()
+    (d / "mode").write_text("apply\n")
+    assert run_loop(FA_WINDOW_START="0", FA_WINDOW_END="0") == []          # outside the night window
+    assert run_loop(FA_WINDOW_START="0", FA_WINDOW_END="24") == ["ran apply"]
+
+    (d / "pending.json").write_text("{}")
+    (d / "last_run").unlink(missing_ok=True)
+    runs = run_loop(FA_WINDOW_START="0", FA_WINDOW_END="24")
+    assert runs == ["ran verify"]                        # verify first; no new apply while pending
 
 
 def test_patches_webapp_and_console_mount(tmp_path: Path):

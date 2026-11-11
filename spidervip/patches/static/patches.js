@@ -16,11 +16,34 @@
     const rows = (r.sats || []).slice().sort((a, b) =>
       (b.counts.changed + b.counts.new + b.counts.gone) - (a.counts.changed + a.counts.new + a.counts.gone)).slice(0, 12)
       .map((s) => `<tr><th scope="row">${esc(s.name)}</th><td>${fa(s.counts.changed)}</td><td>${fa(s.counts.new)}</td><td>${fa(s.counts.gone)}${s.deletions_preselected ? "" : " *"}</td></tr>`).join("");
+    const sm = r.summary || {};
+    const RES = {
+      applied: `<p class="pt-res pt-ok">اعمال و تأیید شد: ${fa(sm.changed)} اصلاح، ${fa(sm.new)} جدید، ${fa(sm.gone)} حذف (TP: ${fa(sm.tps_before)} ← ${fa(sm.tps_after)})؛
+        ${fa(r.channels_removed)} کانال و ${fa(r.favorite_entries_removed)} خانهٔ Favorite همراه TPهای حذف‌شده رفتند؛ Motor ${fa((r.motor_restored || []).length)} ماهواره برگشت.
+        ${r.verified_time ? `تأیید: ${esc(r.verified_time.replace("T", " "))}` : ""}</p>`,
+      rolled_back: `<p class="pt-res pt-warn">اعمال شد ولی تأیید نشد و رسیور به snapshot برگشت${r.rollback_ok === false ? " (بررسی برگشت هم مشکل داشت!)" : ""}: ${esc((r.problems || []).join("؛ "))}</p>`,
+      error_restored: `<p class="pt-res pt-warn">خطا هنگام اعمال؛ snapshot برگردانده شد: ${esc(r.error || "")}</p>`,
+      nothing: `<p class="pt-res pt-ok">تغییری لازم نبود؛ لیست رسیور با منبع هم‌گام است.</p>`,
+    };
+    const resultLine = r.mode === "apply" ? (RES[r.result] || "") : "";
+    const cand = r.candidates;
+    const nearbyNote = (t) => (t.nearby && t.nearby.length
+      ? ` <span class="pt-near">— ماهوارهٔ همسایه: در منبع روی <span class="ltr">${t.nearby.map((n) => `${esc(n.sat)} (${esc(n.position)}) SR ${esc(n.sr)}`).join("، ")}</span> هست</span>`
+      : "");
+    const crLine = cand && cand.tps && cand.tps.length ? `<div class="pt-res pt-warn"><b>نامزد حذف (حذف نشدند):</b>
+      ${fa(cand.tps.length)} TP دارای کانال در منبع (OpenPLi) نیستند و برای حفظ کانال‌ها دست‌نخورده ماندند. اگر می‌دانید از هوا رفته‌اند،
+      از ابزار فرکانس در کنسول حذفشان کنید:
+      <ul>${cand.tps.map((t) => `<li><span class="ltr">${esc(t.sat)} — ${esc(t.freq)} ${esc(t.pol)} SR ${esc(t.sr)}</span>${nearbyNote(t)}</li>`).join("")}</ul>
+      ${cand.tps.some((t) => t.nearby && t.nearby.length) ? `<p class="pt-meta">«ماهوارهٔ همسایه»: همین فرکانس در منبع روی ماهوارهٔ دیگری در فاصلهٔ کمتر از یک درجه هست.
+        دیش آن ماهواره را هم می‌گیرد و اسکن کانال‌ها را زیر این ماهواره ذخیره کرده است؛ یعنی از هوا نرفته‌اند — حذفشان نکنید.</p>` : ""}
+      کانال‌ها: ${esc((cand.channels || []).join("، "))}</div>` : "";
     return `<div class="pt-report">
+      ${resultLine}
+      ${crLine}
       <p><b>آخرین گزارش رسیور:</b> ${esc((r.time || "").replace("T", " "))} · ${fa(r.seconds)} ثانیه ·
         منبع ساخته‌شده ${esc((src.created || "—").replace("T", " "))} · رسیور ${fa(box.tps)} TP / ${fa(box.channels)} کانال</p>
-      <p>اگر اعمال می‌شد: <b>${fa(w.changed)}</b> اصلاح، <b>${fa(w.new)}</b> TP جدید، <b>${fa(w.removed)}</b> حذف؛
-        ${fa(w.protected)} TP دارای کانال دست‌نخورده.</p>
+      <p>${r.mode === "apply" ? "برنامهٔ این اجرا" : "اگر اعمال می‌شد"}: <b>${fa(w.changed)}</b> اصلاح، <b>${fa(w.new)}</b> TP جدید، <b>${fa(w.removed)}</b> حذف؛
+        ${fa(w.protected)} TP دارای کانال که فقط پارامترشان عوض شده، دست‌نخورده (برای به‌روز کردن، روی رسیور اسکن کنید).</p>
       ${rows ? `<div class="pt-table-wrap"><table class="pt-table"><thead><tr><th>ماهواره</th><th>اصلاح</th><th>جدید</th><th>نبودن در منبع</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="pt-meta">* حذف‌های این ماهواره پیش‌انتخاب نمی‌شوند (منبع ناقص به نظر می‌رسد). ۱۲ ماهوارهٔ پرتغییر نمایش داده شده‌اند.</p>` : ""}
     </div>`;
@@ -118,6 +141,7 @@
     if (action === "report") return showReport(id);
     const p = state.patches.find((x) => x.id === id);
     if (action === "run") {
+      if (!window.confirm(`«${p.title}» همین حالا روی رسیور اجرا شود؟ اگر حالت آن «اعمال» باشد، لیست به‌روز و رسیور راه‌اندازی دوباره می‌شود (حدود ۲ دقیقه)؛ بعد «نمایش گزارش» را بزنید.`)) return;
       state.busy = id; state.action = "run"; render();
       try {
         const data = await api("/api/run", { method: "POST", body: JSON.stringify({ ...conn(), id }) });

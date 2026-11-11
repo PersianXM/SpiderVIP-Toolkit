@@ -1,19 +1,27 @@
 #!/bin/sh
-# SpiderVIP automatic frequency update — on-box scheduler (phase 1: report only).
+# SpiderVIP automatic frequency update — on-box scheduler.
 #
-# Started at every boot from /home/gx/local/user_script. Waits until NTP has set
-# the clock (the box reads 2026-08-14 early in each boot), then runs runner.py
-# once the interval has passed since the last successful run. A failed run is
-# retried after RETRY seconds. Runs at the lowest CPU priority. Nothing on the
-# receiver is changed in this phase; results go to last_report.json and log.
+# Started at every boot from /home/gx/local/user_script.
+#  * If an apply is waiting for verification (pending.json), verify it first,
+#    after the box has settled (runner.py verify may roll back once).
+#  * Waits until NTP has set the clock (the box reads 2026-08-14 early in each
+#    boot; min_epoch is written at install).
+#  * When interval_s (default 7 days) has passed since the last successful run,
+#    runs runner.py in the mode from the "mode" file (apply|report). "apply"
+#    only starts inside the night window (WINDOW_START..WINDOW_END hours,
+#    default 00..06); "report" runs any time. A failed run is retried after
+#    RETRY seconds. Runs at the lowest CPU priority.
 #
-# Files in $D: interval_s (seconds between runs), min_epoch (clock sanity floor,
-# written at install), last_run, last_try, pid ("<pid> <boot_id>"), disable.
+# Files in $D: mode, interval_s, min_epoch, last_run, last_try, pid
+# ("<pid> <boot_id>"), disable, pending.json, last_report.json, log.
 
 D=${FA_DIR:-/data/spidervip_freq_auto}
 PROC=${FA_PROC:-/proc}
 CHECK=${FA_CHECK:-600}
 RETRY=${FA_RETRY:-21600}
+SETTLE=${FA_SETTLE:-90}
+WINDOW_START=${FA_WINDOW_START:-0}
+WINDOW_END=${FA_WINDOW_END:-6}
 PY=${FA_PY:-python3}
 
 trap '' HUP
@@ -28,8 +36,21 @@ log() {
 }
 
 num() { v=$(cat "$1" 2>/dev/null); case "$v" in ''|*[!0-9]*) echo "$2" ;; *) echo "$v" ;; esac; }
+mode() { m=$(cat "$D/mode" 2>/dev/null); [ "$m" = apply ] && echo apply || echo report; }
+in_window() {
+    h=$(date +%H); h=${h#0}; h=${h:-0}
+    [ "$h" -ge "$WINDOW_START" ] && [ "$h" -lt "$WINDOW_END" ]
+}
 
-log "start (report-only) interval=$(num "$D/interval_s" 6220800)s"
+log "start mode=$(mode) interval=$(num "$D/interval_s" 604800)s window=${WINDOW_START}-${WINDOW_END}h"
+
+if [ -e "$D/pending.json" ]; then
+    log "pending apply: verifying in ${SETTLE}s"
+    sleep "$SETTLE"
+    nice -n 19 $PY "$D/runner.py" verify >> "$D/log" 2>&1
+    log "verify end rc=$?"
+fi
+
 waited=0
 while :; do
     [ -e "$D/disable" ] && { log "disabled, exit"; exit 0; }
@@ -37,17 +58,22 @@ while :; do
     if [ "$now" -lt "$(num "$D/min_epoch" 0)" ]; then
         [ "$waited" = 1 ] || log "waiting for the clock (NTP)"
         waited=1
-    else
-        interval=$(num "$D/interval_s" 6220800)
+    elif [ ! -e "$D/pending.json" ]; then
+        interval=$(num "$D/interval_s" 604800)
         last=$(num "$D/last_run" 0)
         try=$(num "$D/last_try" 0)
+        m=$(mode)
         if [ $((now - last)) -ge "$interval" ] && [ $((now - try)) -ge "$RETRY" ]; then
-            echo "$now" > "$D/last_try"
-            log "run"
-            nice -n 19 $PY "$D/runner.py" >> "$D/log" 2>&1
-            rc=$?
-            [ "$rc" = 0 ] && echo "$now" > "$D/last_run"
-            log "run end rc=$rc"
+            if [ "$m" = report ] || in_window; then
+                echo "$now" > "$D/last_try"
+                log "run $m"
+                # An apply that reaches the box writes last_run itself just before
+                # its forced reboot; one that fails earlier is retried after RETRY.
+                nice -n 19 $PY "$D/runner.py" "$m" >> "$D/log" 2>&1
+                rc=$?
+                [ "$rc" = 0 ] && echo "$now" > "$D/last_run"
+                log "run end rc=$rc"
+            fi
         fi
     fi
     sleep "$CHECK"

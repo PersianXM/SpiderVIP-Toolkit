@@ -193,6 +193,37 @@ def signatures_by_sat(sats: List[Satellite]) -> Dict[str, List[tuple]]:
     return out
 
 
+def nearby_tps(sats: List[Satellite], position: int, freq_khz: int, pol: str, *,
+               max_pos_delta: int = 10, freq_tol_khz: int = 3000) -> List[Dict[str, object]]:
+    """The same carrier on a *neighbouring* satellite (other position, within
+    ``max_pos_delta`` tenths of a degree), compared in box form.
+
+    A dish aimed at one slot also receives a satellite half a degree away, so a
+    scan can store its TPs under the wrong satellite (seen 2026-11-11: Es'hail 1
+    25.5E TPs stored under Badr 26.0E). Such a TP is "missing from the source"
+    for its own satellite but is not off air.
+    """
+
+    want = BOX_POL.get(pol, pol)
+    out: List[Dict[str, object]] = []
+    seen = set()
+    for sat in sats:
+        delta = abs(sat.position - position)
+        if delta == 0 or delta > max_pos_delta:
+            continue
+        for tp in sat.tps:
+            b = to_box_form(tp)
+            if b.pol != want or abs(b.freq_khz - freq_khz) > freq_tol_khz:
+                continue
+            key = (sat.name, b.freq_khz, b.pol, b.sr)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"sat": sat.name, "position": position_label(sat.position),
+                        "freq": b.freq_khz // 1000, "pol": POL.get(b.pol, "?"), "sr": b.sr // 1000})
+    return out
+
+
 def total_tps(sats: List[Satellite]) -> int:
     return sum(len(s.tps) for s in sats)
 

@@ -181,7 +181,7 @@ def create_app(*, workspace: Optional[Path] = None, deployer_factory: Optional[C
             return jsonify({"ok": False, "error": "هنوز برنامه‌ای ساخته نشده است."}), 404
         for s in plan["sats"]:
             if s["box_index"] == box_index:
-                rows = [{k: v for k, v in r.items() if k != "src_attrs"} for r in s["rows"]]
+                rows = [{k: v for k, v in r.items() if k not in ("src_attrs", "box_attrs")} for r in s["rows"]]
                 return jsonify({"ok": True, "box_index": box_index, "rows": rows})
         return jsonify({"ok": False, "error": "این ماهواره در برنامه نیست."}), 404
 

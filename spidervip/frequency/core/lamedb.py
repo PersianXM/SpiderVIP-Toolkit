@@ -17,7 +17,7 @@ Standard library only (Python 3.9).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 
 @dataclass(frozen=True)
@@ -107,3 +107,136 @@ def channel_tps(text: str) -> List[LameTp]:
     """Only the transponders that carry at least one stored channel."""
 
     return [t for t in parse_transponders(text) if t.services > 0]
+
+
+def _params_tp(params: str):
+    f = params.strip()[2:].split(":") if params.strip().startswith("s ") else []
+    try:
+        pos = int(f[4])
+        if pos > 1800:
+            pos -= 3600
+        return pos, int(f[0]), int(f[1]), f[2]
+    except (IndexError, ValueError):
+        return None
+
+
+def remove_transponders(text: str, targets) -> Tuple[str, List[str], List[Tuple[str, str, str, str, str]]]:
+    """Drop TP blocks matching ``targets`` (``(position, freq_khz, pol, sr)``) and their channels.
+
+    Matching: same position and polarization, frequency and symbol rate within
+    1 MHz / 1 kS/s. A service is removed only when its ``ns:tsid:onid`` key has
+    no TP left (the vendor DB sometimes shares one key between two TPs; then
+    the owner TP of each service is unknown, so the services stay).
+
+    Returns ``(new_text, removed_keys, removed_services)`` where a service is
+    ``(sid, ns, tsid, onid, type)`` as hex strings from lamedb.
+    """
+
+    targets = list(targets)
+
+    def hit(tp):
+        if tp is None:
+            return False
+        pos, f, sr, pol = tp
+        for tpos, tf, tpol, tsr in targets:
+            if pos == tpos and pol == tpol and abs(f - tf) <= 1000 and abs(sr - tsr) <= 1000:
+                return True
+        return False
+
+    lines = text.splitlines(keepends=True)
+    out: List[str] = []
+    removed_keys: List[str] = []
+    kept_keys = set()
+    section = None
+    i = 0
+    # pass 1: transponders
+    while i < len(lines):
+        raw = lines[i]
+        line = raw.rstrip("\r\n")
+        if line in ("transponders", "services"):
+            section = line
+            out.append(raw)
+            i += 1
+            continue
+        if line == "end":
+            section = None
+            out.append(raw)
+            i += 1
+            continue
+        if section == "transponders" and line and not line.startswith("\t") and line != "/":
+            block = lines[i:i + 3]
+            params = block[1].rstrip("\r\n") if len(block) > 1 else ""
+            key = line.strip().lower()
+            if hit(_params_tp(params)):
+                removed_keys.append(key)
+            else:
+                kept_keys.add(key)
+                out.extend(block)
+            i += 3
+            continue
+        if section == "services" and line:
+            out.extend(lines[i:i + 3])
+            i += 3
+            continue
+        out.append(raw)
+        i += 1
+    # pass 2: services whose key no longer has any TP
+    gone = {k for k in removed_keys if k not in kept_keys}
+    final: List[str] = []
+    removed_services: List[Tuple[str, str, str, str, str]] = []
+    section = None
+    i = 0
+    while i < len(out):
+        line = out[i].rstrip("\r\n")
+        if line == "services":
+            section = "services"
+            final.append(out[i])
+            i += 1
+            continue
+        if line == "end":
+            section = None
+        if section == "services" and line and line != "end":
+            p = line.split(":")
+            key = ":".join(p[1:4]).lower() if len(p) >= 5 else ""
+            if key in gone:
+                removed_services.append((p[0], p[1], p[2], p[3], p[4]))
+                i += 3
+                continue
+            final.extend(out[i:i + 3])
+            i += 3
+            continue
+        final.append(out[i])
+        i += 1
+    return "".join(final), removed_keys, removed_services
+
+
+def bouquet_ref_key(sid: str, ns: str, tsid: str, onid: str) -> Tuple[int, int, int, int]:
+    return (int(sid, 16), int(ns, 16), int(tsid, 16), int(onid, 16))
+
+
+def filter_bouquet(text: str, services) -> Tuple[str, int]:
+    """Remove ``#SERVICE 1:0:type:SID:TSID:ONID:NS:…`` lines (and their #DESCRIPTION)."""
+
+    drop = {bouquet_ref_key(s[0], s[1], s[2], s[3]) for s in services}
+    lines = text.splitlines(keepends=True)
+    out: List[str] = []
+    removed = 0
+    skip_desc = False
+    for raw in lines:
+        line = raw.strip()
+        if skip_desc and line.startswith("#DESCRIPTION"):
+            skip_desc = False
+            continue
+        skip_desc = False
+        if line.startswith("#SERVICE "):
+            ref = line[len("#SERVICE "):].split(":")
+            try:
+                key = (int(ref[3], 16), int(ref[6], 16), int(ref[4], 16), int(ref[5], 16))
+            except (IndexError, ValueError):
+                key = None
+            if key in drop:
+                removed += 1
+                skip_desc = True
+                continue
+        out.append(raw)
+    return "".join(out), removed

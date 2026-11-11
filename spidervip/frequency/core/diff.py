@@ -46,6 +46,7 @@ class Row:
     src: Optional[Transponder] = None
     changes: Dict[str, Tuple[str, str]] = field(default_factory=dict)
     note: str = ""
+    channels: bool = False  # a "gone" row whose TP carries stored channels (lamedb)
 
 
 def unrepresentable(tp: Transponder) -> Optional[str]:
@@ -97,8 +98,14 @@ def source_in_box_form(src_sat: Satellite) -> List[Transponder]:
 
 
 def compare(box_sat: Satellite, src_sat: Satellite, band: str = "Ku",
-            protected: Optional[set] = None) -> List[Row]:
-    """``protected``: indexes of receiver TPs that carry stored channels."""
+            protected: Optional[set] = None, delete_channel_tps: bool = False) -> List[Row]:
+    """``protected``: indexes of receiver TPs that carry stored channels.
+
+    With ``delete_channel_tps`` a channel TP missing from the source becomes a
+    ``gone`` row flagged ``channels`` (its channels must also be removed from
+    lamedb/bouquets, see ``lamedb.remove_transponders``); a changed channel TP
+    stays ``protected`` either way.
+    """
 
     protected = protected or set()
     tol_khz = FREQ_TOL_MHZ.get(band, 3) * 1000
@@ -124,7 +131,10 @@ def compare(box_sat: Satellite, src_sat: Satellite, band: str = "Ku",
     for bi, b in enumerate(box_sat.tps):
         si = box_used.get(bi)
         if si is None:
-            if bi in protected:
+            if bi in protected and delete_channel_tps:
+                rows.append(Row("gone", box_pos=bi, box=b, channels=True,
+                                note="این TP کانال ذخیره‌شده دارد؛ با حذف آن، کانال‌هایش هم حذف می‌شوند."))
+            elif bi in protected:
                 rows.append(Row("protected", box_pos=bi, box=b, note=PROTECTED_NOTE))
             else:
                 rows.append(Row("gone", box_pos=bi, box=b))

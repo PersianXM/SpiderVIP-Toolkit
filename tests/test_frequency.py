@@ -106,6 +106,26 @@ def test_diff_kinds_and_change_rules():
     assert set(rows[3].changes) == {"frequency", "symbol_rate"}
 
 
+def test_nearby_tps_finds_carrier_on_neighbouring_satellite_only():
+    from spidervip.frequency.core import satxml
+
+    data = (b'<?xml version="1.0"?>\n<satellites>\n'
+            b'  <sat name="25.5E Es&apos;hail 1" flags="0" position="255">\n'
+            b'    <transponder frequency="11604000" symbol_rate="27500000" polarization="0"/>\n'
+            b'    <transponder frequency="11623000" symbol_rate="27500000" polarization="1"/>\n  </sat>\n'
+            b'  <sat name="26.0E Badr" flags="0" position="260">\n'
+            b'    <transponder frequency="11604000" symbol_rate="27500000" polarization="0"/>\n  </sat>\n'
+            b'  <sat name="28.2E Astra" flags="0" position="282">\n'
+            b'    <transponder frequency="11604000" symbol_rate="27500000" polarization="0"/>\n  </sat>\n'
+            b'</satellites>\n')
+    sats = satxml.parse(data)
+    near = satxml.nearby_tps(sats, 260, 11604000, "0")
+    # Same position (the TP's own satellite) and > 1.0 degree away are not "neighbours".
+    assert near == [{"sat": "25.5E Es'hail 1", "position": "25.5E", "freq": 11604, "pol": "H", "sr": 27500}]
+    assert satxml.nearby_tps(sats, 260, 11604000, "1") == []          # other polarization
+    assert satxml.nearby_tps(sats, 260, 11610000, "0") == []          # > 3 MHz off
+
+
 def test_source_is_put_in_box_form_before_comparing():
     # Box keeps only H/V and whole MHz: source L 3960.6 MHz == box H 3960 MHz.
     box = satxml.parse(xml(("C", -9, [tp(3960, "0", 2410, fec="7")])))[0]

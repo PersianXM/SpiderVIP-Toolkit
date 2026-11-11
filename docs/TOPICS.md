@@ -12,7 +12,7 @@
 | فریز صوت/تصویر | `spidervip/freeze/`، `patches/`، ابزارهای freeze/gadget در `tools/` | [`docs/freeze/README.md`](freeze/README.md) | `cursor/freeze-forensic-capture` و مشابه |
 | کانال و Favorite | `spidervip/channels/` | [`docs/channels/README.md`](channels/README.md) | `feature/channel-favorite-manager` |
 | به‌روزرسانی فرکانس (Frequency update) | `spidervip/frequency/` | [`docs/frequency/README.md`](frequency/README.md) | نسخهٔ PC آماده (با برگرداندن خودکار Motor)؛ قدم بعد: اجرای خودکار روی رسیور |
-| وصلهٔ رسیور (Receiver patches) | `spidervip/patches/` | [`docs/patches/README.md`](patches/README.md) | نگهبان فریز آماده؛ فرکانس خودکار فاز ۱ (فقط گزارش) آماده |
+| وصلهٔ رسیور (Receiver patches) | `spidervip/patches/` | [`docs/patches/README.md`](patches/README.md) | نگهبان فریز آماده؛ فرکانس خودکار فاز ۲ (اعمال خودکار) ساخته شد، هنوز روی رسیور نصب نشده |
 | کنسول واحد (SpiderVIP Console) | `spidervip/console/` | [`docs/console/README.md`](console/README.md) | فاز ۲؛ `spidervip console` |
 
 ## قوانین کار
