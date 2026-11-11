@@ -32,6 +32,15 @@
 # both audio freezes one player thread was missing from the process, which
 # fits a thread killed by a kernel fault while it held the AO lock; the
 # saved log is there to show that fault. AW_KMSG_KEEP=0 turns it off.
+#
+# Kernel Oops: the freeze of 2026-11-10 began with an Oops in an AO ioctl
+# (AO_Track_GetDelayMs). The thread died holding the AO lock and the three
+# signs above only agreed 74 s later. An Oops sets bit 128 in
+# kernel.tainted, so when that bit appears while this script runs it saves
+# the evidence and reboots at once, without waiting for the three signs and
+# without the MIN_UPTIME wait. The MAX_STREAK limit still applies. An Oops
+# from before this script started is only logged. AW_OOPS_REBOOT=0 turns
+# the reboot off; the Oops is then only logged.
 
 D=${AW_DIR:-/data/audio_watch}
 PROC=${AW_PROC:-/proc}
@@ -46,6 +55,8 @@ DMESG=${AW_DMESG:-dmesg}
 PANIC_SEC=${AW_PANIC_SEC:-10}
 KMSG=${AW_KMSG:-/dev/kmsg}
 KMSG_KEEP=${AW_KMSG_KEEP:-3000}
+OOPS_REBOOT=${AW_OOPS_REBOOT:-1}
+OOPS_WAIT=${AW_OOPS_WAIT:-3}
 
 # Keep running after the Telnet session that started it closes.
 trap '' HUP
@@ -80,6 +91,12 @@ reboot_box() {
 
 uptime_s() {
     cut -d. -f1 "$PROC/uptime"
+}
+
+# 128 once the kernel has had an Oops since boot (the D taint bit), else 0.
+oops_bit() {
+    t=$(cat "$PROC/sys/kernel/tainted" 2>/dev/null)
+    echo $(( ${t:-0} & 128 ))
 }
 
 aiao_count() {
@@ -137,8 +154,14 @@ save_evidence() {
             done
         fi
         ( cat "$PROC/msp/*adsp" 2>/dev/null & ); sleep 1
+        # sound0 uses the same SND_0 card pointer that was bad in the Oops
+        # of 2026-11-10, and takes no AO lock. A normal printout means the
+        # pointer in memory is good again; no printout and a second Oops in
+        # the kmsg below means it stayed bad. That Oops only kills this cat.
+        echo "--- sound0"
+        ( ( cat "$PROC/msp/sound0"; echo "sound0 exit=$?" ) 2>&1 & ); sleep 2
         echo "--- kmsg"
-        cat "$D/kmsg.old" "$D/kmsg" 2>/dev/null | tail -n 200
+        cat "$D/kmsg.old" "$D/kmsg" 2>/dev/null | tail -n 400
     } > "$f" 2>&1
     ls -t "$D"/event_*.txt 2>/dev/null | sed -n '6,$p' | while read -r old; do rm -f "$old"; done
 }
@@ -165,6 +188,8 @@ if [ "$KMSG_KEEP" != 0 ] && [ -e "$KMSG" ]; then
     klog_tap
     log "kernel log tap on"
 fi
+oops=$(oops_bit)
+[ "$oops" = 0 ] || log "kernel Oops already in tainted at start, not acting on it"
 prev=""
 stalled=0
 held=0
@@ -177,6 +202,24 @@ while :; do
         echo 0 > "$D/streak"
         healthy_logged=1
         log "healthy run, streak reset"
+    fi
+    if [ "$oops" = 0 ] && [ "$(oops_bit)" != 0 ]; then
+        oops=128
+        tainted=$(cat "$PROC/sys/kernel/tainted" 2>/dev/null)
+        if [ "$OOPS_REBOOT" = 0 ]; then
+            log "kernel Oops (tainted=$tainted), reboot on Oops is off"
+        elif [ "$streak" -ge "$MAX_STREAK" ]; then
+            log "kernel Oops (tainted=$tainted) but $streak auto reboots in a row, not rebooting"
+        else
+            streak=$((streak + 1))
+            echo "$streak" > "$D/streak"
+            # Give the tap time to store the whole Oops text.
+            sleep "$OOPS_WAIT"
+            save_evidence
+            log "kernel Oops (tainted=$tainted), rebooting, streak=$streak"
+            $REBOOT
+            exit 0
+        fi
     fi
     ai=$(aiao_count)
     if [ -n "$ai" ] && [ "$ai" = "$prev" ]; then
