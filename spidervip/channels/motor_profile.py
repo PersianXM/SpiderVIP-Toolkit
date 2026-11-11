@@ -7,14 +7,16 @@ strings from a pre-Apply ``/data/gx/live_prog`` into the post-Apply file to
 "restore" Motor after ``servicelistreload``. On 2026-11-11 ``live_prog`` was
 shown to be LZ-compressed (first 4 bytes = little-endian unpacked size, only
 ~4 of 227 satellite names appear as plain text), so splicing bytes into it can
-corrupt everything after the splice. The premise was also unproven:
-``MotorSettingReinit`` in ``bianbiang`` is only the antenna-menu init.
+corrupt everything after the splice. (That the reload clears Motor was proven
+later the same day; the fix was still never to splice compressed bytes.)
 
 Favorite Apply now takes a whole-file ``live_prog`` snapshot and offers a
-whole-file rollback (see ``apply.py``). This profile only remembers which
-satellites the owner drives with USALS / DiSEqC 1.2 (and the site
-coordinates), so the dashboard can remind the owner what to check in the
-receiver's antenna/Motor menu after Apply.
+whole-file rollback (see ``apply.py``). Since v0.12.1 it also restores Motor
+automatically from ``live_prog`` itself, decoded properly (LZO1X unpack →
+52-byte satellite records → pack; see ``motor_restore.py``). This profile is
+not used for that: it only remembers which satellites the owner drives with
+USALS / DiSEqC 1.2 (and the site coordinates), for the fallback reminder when
+the Motor map could not be read from the box.
 
 Legacy ``captured_*`` fields are still read and written so an existing
 ``motor_profile.json`` round-trips unchanged, but nothing uses them.
@@ -125,16 +127,15 @@ def save_motor_profile(path: Path, profile: MotorProfile) -> None:
 
 
 MOTOR_CHECK_NOTE = (
-    "بعد از Apply حتماً منوی آنتن/موتور (Antenna / Motor) رسیور را باز کنید و "
-    "ببینید USALS/موتور و موقعیت ماهواره‌ها درست مانده باشد. این برنامه دیگر "
-    "تنظیمات موتور را داخل live_prog دست‌کاری نمی‌کند. اگر تنظیمات موتور به هم "
-    "خورده بود، یا دوباره از منوی رسیور تنظیمش کنید یا با «برگشت به snapshot» "
+    "بعد از Apply منوی آنتن/موتور (Antenna / Motor) رسیور را باز کنید و ببینید "
+    "USALS/موتور ماهواره‌ها درست مانده باشد (ثبت Favorite نوع Motor را Off می‌کند). "
+    "اگر Off شده بود، یا دوباره از منوی رسیور USALS کنید یا با «برگشت به snapshot» "
     "کل live_prog قبل از Apply را برگردانید (Favoriteهای جدید هم برمی‌گردند)."
 )
 
 
 def motor_check_note(profile: "MotorProfile | None" = None) -> str:
-    """Persian reminder shown after Apply; lists the saved motored positions."""
+    """Persian manual-check reminder (fallback when the Motor map is unknown)."""
 
     note = MOTOR_CHECK_NOTE
     if profile is None:

@@ -393,11 +393,12 @@ class LiveChannelReceiver:
         Tries the configured ``webif_port`` first, then the same fallbacks as
         Frequency deploy (80, 9095). Some lab boxes only expose WebIF on 9095.
 
-        Side effect: firmware also reimports ``satellites.xml``. Whether this
-        touches dish Motor/USALS is unproven (``MotorSettingReinit`` in
-        ``bianbiang`` is only the antenna-menu init), so Apply asks the owner
-        to check the antenna/Motor menu and offers a whole-file rollback.
-        ``live_prog`` is compressed and is never patched byte-wise.
+        Side effect: firmware also reimports ``satellites.xml`` and sets the
+        Motor type of every satellite to Off (proven 2026-11-11; site
+        latitude/longitude stays). Apply restores it afterwards through
+        ``motor_restore.MotorKeeper`` (unpack → patch → pack the whole file)
+        and offers a whole-file rollback. The compressed stream itself is
+        never patched byte-wise.
         """
 
         import urllib.error

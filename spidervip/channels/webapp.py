@@ -264,9 +264,10 @@ def make_handler(app: ChannelApp):
                             "pipeline": app.pipeline.status,
                             "persistence_warning": (
                                 "Apply commits Favorites into live_prog after a whole-file "
-                                "live_prog snapshot on the receiver. Motor/USALS is not "
-                                "touched — check the antenna/Motor menu after Apply; "
-                                "rollback restores the whole snapshot."
+                                "live_prog snapshot on the receiver. The reload turns "
+                                "Motor/USALS Off; Apply writes it back and force-reboots, "
+                                "or lists the satellites to fix by hand; rollback "
+                                "restores the whole snapshot."
                             ),
                         },
                     )

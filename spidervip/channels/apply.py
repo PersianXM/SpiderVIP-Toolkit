@@ -4,8 +4,12 @@
 byte-wise. It takes a whole-file snapshot (``live_prog`` + ``enigma_db``) on
 the box before the first write, and rollback copies that whole snapshot back
 followed by a forced reboot — the same model as ``spidervip/frequency/deploy.py``.
-Dish Motor/USALS is not touched; the owner is asked to check the antenna/Motor
-menu after Apply (see ``motor_profile.motor_check_note``).
+
+``servicelistreload`` sets every satellite's Motor type to Off. Apply reads the
+Motor map from ``live_prog`` before the reload, writes it back into the
+post-reload ``live_prog`` (whole file, unpack → patch → pack, md5-checked),
+force-reboots and verifies it after boot — see ``motor_restore.py``. If that
+does not finish, the notice lists the satellites to set back by hand.
 """
 
 from __future__ import annotations
@@ -20,9 +24,17 @@ from typing import Callable, Dict, List, Optional
 from .bouquets import favorites_to_bouquet_files, parse_bouquet_files
 from .manager import FavoriteManager
 from .model import ApplyReport, FavoriteList, OperationStatus
+from .motor_restore import MotorKeeper, describe, fallback_note, success_note, supported
 from .receiver import ChannelReceiver
 
 StatusCallback = Callable[[OperationStatus, str], None]
+
+ROLLBACK_MOTOR_NOTE = (
+    "کل live_prog از snapshot برگشت و رسیور با reboot -f بالا آمد، پس تنظیم "
+    "Motor/USALS همان است که هنگام گرفتن آن snapshot بود (Apply آن را پیش از "
+    "servicelistreload می‌گیرد). اگر در منوی آنتن/موتور ماهواره‌ای Off بود، همان‌جا "
+    "دوباره USALS کنید."
+)
 
 
 class ApplyBusyError(RuntimeError):
@@ -47,6 +59,8 @@ class SafeApplyPipeline:
         self._status = OperationStatus.IDLE
         self._message = ""
         self._steps: List[str] = []
+        self._keeper: Optional[MotorKeeper] = None
+        self._reloaded = False
 
     @property
     def status(self) -> Dict[str, object]:
@@ -74,6 +88,8 @@ class SafeApplyPipeline:
         if not self._lock.acquire(blocking=False):
             raise ApplyBusyError("Another apply operation is already in progress.")
         self._steps = []
+        self._keeper = None
+        self._reloaded = False
         snapshot_path: Optional[Path] = None
         receiver_snap: Optional[str] = None
         expected = self.manager.list_favorites()
@@ -168,6 +184,9 @@ class SafeApplyPipeline:
             receiver_snap = str(take())
             self._steps.append(f"receiver_snapshot: {receiver_snap} (whole live_prog + enigma_db)")
 
+            # servicelistreload sets every satellite's Motor type to Off: remember it now.
+            self._read_motor(on_status)
+
             self._set(OperationStatus.UPLOADING, "Uploading bouquet files to receiver enigma_db", on_status)
             self.receiver.push_bouquet_files(staged, staging=True)
 
@@ -185,6 +204,7 @@ class SafeApplyPipeline:
                     "Receiver backend cannot commit service list to live_prog "
                     "(missing commit_service_list)."
                 )
+            self._reloaded = True
             try:
                 commit()
             except Exception:
@@ -206,9 +226,24 @@ class SafeApplyPipeline:
                     ),
                 )
 
-            if reboot:
-                self._set(OperationStatus.REBOOTING, "Rebooting receiver to confirm persistence", on_status)
-                self.receiver.reboot()
+            keeper = self._keeper
+            force = bool(keeper is not None and keeper.saved)
+            if force:
+                self._restore_motor(on_status)
+
+            if reboot or force:
+                if force:
+                    # The patched live_prog only survives a forced reboot: a normal
+                    # shutdown saves the app's in-memory copy (Motor Off) over it.
+                    self._set(
+                        OperationStatus.REBOOTING,
+                        "Force-rebooting receiver so the restored Motor settings are loaded",
+                        on_status,
+                    )
+                    self.receiver.reboot(force=True)
+                else:
+                    self._set(OperationStatus.REBOOTING, "Rebooting receiver to confirm persistence", on_status)
+                    self.receiver.reboot()
                 ready = self.receiver.wait_until_ready()
                 if not ready:
                     raise RuntimeError(
@@ -222,6 +257,8 @@ class SafeApplyPipeline:
                     on_status,
                 )
                 self._wait_for_post_boot_settle()
+                if keeper is not None and keeper.patched:
+                    self._verify_motor(on_status)
                 self._set(OperationStatus.VERIFYING, "Verifying favorites after reboot", on_status)
                 ok = self._verify_stable(expected)
                 if not ok:
@@ -235,16 +272,12 @@ class SafeApplyPipeline:
 
             self._prune_quietly()
             notice = self._motor_notice()
-            self._steps.append(
-                "motor_check: Motor/USALS is not touched by Apply — check the "
-                "receiver's antenna/Motor menu; rollback snapshot: " + receiver_snap
-            )
             report = ApplyReport(
                 status=OperationStatus.COMPLETED,
                 message=(
                     "Favorites committed into live_prog"
-                    + (" and verified after reboot." if reboot else ".")
-                    + " Check the antenna/Motor menu on the receiver."
+                    + (" and verified after reboot." if (reboot or force) else ".")
+                    + self._motor_message()
                 ),
                 steps=list(self._steps),
                 verified=True,
@@ -252,6 +285,7 @@ class SafeApplyPipeline:
                 snapshot_path=str(snapshot_path) if snapshot_path else None,
                 receiver_snapshot=receiver_snap,
                 notice=notice,
+                motor=self._motor_summary(),
             )
             self._set(OperationStatus.COMPLETED, report.message, on_status)
             return report
@@ -270,7 +304,8 @@ class SafeApplyPipeline:
                 rolled_back=False,
                 snapshot_path=str(snapshot_path) if snapshot_path else None,
                 receiver_snapshot=receiver_snap,
-                notice=self._motor_notice() if receiver_snap else "",
+                notice=self._motor_notice() if self._reloaded else "",
+                motor=self._motor_summary(),
             )
             self._status = OperationStatus.FAILED
             self._message = report.message
@@ -362,7 +397,7 @@ class SafeApplyPipeline:
                 verified=False,
                 rolled_back=True,
                 receiver_snapshot=pre,
-                notice=self._motor_notice(),
+                notice=ROLLBACK_MOTOR_NOTE,
             )
             self._set(OperationStatus.COMPLETED, report.message, on_status)
             return report
@@ -421,6 +456,13 @@ class SafeApplyPipeline:
                     "rollback_verify: " + ("favorites match pre-apply state" if verified
                                            else "favorites differ from pre-apply state")
                 )
+                # The snapshot was taken before the reload, so Motor came back with it.
+                keeper = self._keeper
+                if keeper is not None and keeper.saved:
+                    keeper.patched = True
+                    keeper.error = ""
+                    keeper.restored, keeper.missing = [], []
+                    self._verify_motor(on_status)
             else:
                 self._steps.append("rollback_verify: receiver not reachable after forced reboot")
         except Exception as exc:
@@ -443,7 +485,8 @@ class SafeApplyPipeline:
             rolled_back=restored,
             snapshot_path=str(snapshot_path) if snapshot_path else None,
             receiver_snapshot=receiver_snap,
-            notice=self._motor_notice(),
+            notice=self._rollback_notice(),
+            motor=self._motor_summary(),
         )
         self._status = OperationStatus.FAILED
         self._message = report.message
@@ -469,6 +512,78 @@ class SafeApplyPipeline:
             except Exception:
                 pass
 
+    # --- Motor/USALS across servicelistreload ------------------------------
+    def _read_motor(self, on_status: Optional[StatusCallback]) -> None:
+        if not supported(self.receiver):
+            self._steps.append("motor: backend has no file access; Motor restore skipped")
+            return
+        keeper = MotorKeeper(self.receiver, sleep=time.sleep)
+        self._keeper = keeper
+        self._set(OperationStatus.PREPARING, "Reading Motor/USALS settings from live_prog", on_status)
+        try:
+            saved = keeper.read()
+        except Exception as exc:  # never block Apply on this; the notice says what to check
+            keeper.error = f"خواندن Motor از live_prog ممکن نشد: {exc}"
+            self._steps.append(f"motor_read_failed: {exc}")
+            return
+        self._steps.append(
+            f"motor_saved: {len(saved)} satellite(s)"
+            + (": " + describe(sorted(saved), saved) if saved else "")
+        )
+
+    def _restore_motor(self, on_status: Optional[StatusCallback]) -> None:
+        keeper = self._keeper
+        assert keeper is not None
+        self._set(
+            OperationStatus.APPLYING,
+            f"Restoring Motor/USALS of {len(keeper.saved)} satellite(s) in live_prog",
+            on_status,
+        )
+        try:
+            restored, missing = keeper.restore(
+                lambda: self._wait_for_post_boot_settle(timeout=60.0, stable_for=6.0)
+            )
+        except Exception as exc:  # BoxFiles.write is atomic; the old file stays
+            keeper.error = f"نوشتن Motor در live_prog ممکن نشد: {exc}"
+            self._steps.append(f"motor_restore_failed: {exc}")
+            return
+        self._steps.append(
+            f"motor_restored: {len(restored)} satellite(s) written back into live_prog"
+            + (f"; not found after reload: {', '.join(missing)}" if missing else "")
+        )
+
+    def _verify_motor(self, on_status: Optional[StatusCallback]) -> None:
+        keeper = self._keeper
+        assert keeper is not None
+        self._set(OperationStatus.VERIFYING, "Verifying Motor/USALS settings after reboot", on_status)
+        try:
+            diff = keeper.verify()
+        except Exception as exc:
+            keeper.verified = False
+            keeper.error = f"تأیید Motor پس از راه‌اندازی ممکن نشد: {exc}"
+            self._steps.append(f"motor_verify_failed: {exc}")
+            return
+        if diff:
+            self._steps.append("motor_verify: differs after reboot: " + ", ".join(diff))
+        else:
+            self._steps.append(f"motor_verify: all {len(keeper.saved)} satellite(s) match")
+
+    def _motor_summary(self) -> Dict[str, object]:
+        return self._keeper.summary() if self._keeper is not None else {}
+
+    def _motor_message(self) -> str:
+        keeper = self._keeper
+        if keeper is None:
+            return " Check the antenna/Motor menu on the receiver."
+        if keeper.verified:
+            if not keeper.saved:
+                return " No satellite had a Motor setting."
+            return f" Motor/USALS of {len(keeper.saved)} satellite(s) restored automatically and verified."
+        return (
+            " Motor/USALS was NOT fully restored — set it back in the antenna/Motor "
+            "menu (see the notice) or roll back."
+        )
+
     def _motor_notice(self) -> str:
         from .motor_profile import motor_check_note
 
@@ -476,7 +591,22 @@ class SafeApplyPipeline:
             profile = self.manager.get_motor_profile()
         except Exception:
             profile = None
-        return motor_check_note(profile)
+        keeper = self._keeper
+        if keeper is None:
+            return motor_check_note(profile)
+        if keeper.verified:
+            return success_note(keeper)
+        return fallback_note(keeper, profile)
+
+    def _rollback_notice(self) -> str:
+        """After an automatic rollback the pre-reload snapshot brought Motor back."""
+
+        keeper = self._keeper
+        if keeper is not None and keeper.saved:
+            if not keeper.verified:
+                return self._motor_notice()
+            return ROLLBACK_MOTOR_NOTE + " تنظیم Motor پس از برگشت هم تأیید شد."
+        return ROLLBACK_MOTOR_NOTE
 
     def _drop_unresolved_refs(
         self,

@@ -973,8 +973,9 @@
     if (!(await confirmDialog(
       "Apply to receiver",
       "This takes a whole-file live_prog snapshot on the receiver, uploads Favorites, "
-      + "commits them into live_prog, then reboots to verify. Motor/USALS is not touched: "
-      + "check the antenna/Motor menu afterwards. Continue?"
+      + "commits them into live_prog, then reboots to verify. The commit turns Motor/USALS Off; "
+      + "Apply restores it automatically and force-reboots (a notice lists any satellite "
+      + "it could not restore). Continue?"
     ))) return;
     $("btnApply").disabled = true;
     $("applyStatus").textContent = "Preparing…";
@@ -1021,6 +1022,7 @@
     const box = $("motorNotice");
     if (!box) return;
     const text = (report && report.notice) || "";
+    box.classList.toggle("ok", Boolean(report && report.motor && report.motor.verified));
     box.hidden = !text;
     box.textContent = text;
   }

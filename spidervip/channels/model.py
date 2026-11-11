@@ -118,8 +118,10 @@ class ApplyReport:
     snapshot_path: Optional[str] = None
     # Whole-file live_prog + enigma_db snapshot on the box (``snap_…``).
     receiver_snapshot: Optional[str] = None
-    # Operator note (Persian), e.g. "check the antenna/Motor menu".
+    # Operator note (Persian): Motor/USALS restored, or which satellites to set back.
     notice: str = ""
+    # Motor/USALS restore across servicelistreload (see motor_restore.MotorKeeper.summary).
+    motor: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -131,4 +133,5 @@ class ApplyReport:
             "snapshot_path": self.snapshot_path,
             "receiver_snapshot": self.receiver_snapshot,
             "notice": self.notice,
+            "motor": dict(self.motor),
         }

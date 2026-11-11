@@ -444,8 +444,9 @@ def test_apply_takes_whole_snapshot_first_and_never_merges_motor(manager: Favori
     assert not any(a.startswith("restore_snapshot") for a in acts)
     assert report.receiver_snapshot in receiver.list_receiver_snapshots()
     assert any(s.startswith("receiver_snapshot:") for s in report.steps)
-    assert any(s.startswith("motor_check:") for s in report.steps)
-    # Owner is told to check the antenna/Motor menu (Persian note).
+    # The simulator has no shell: Motor restore is skipped, the manual reminder stays.
+    assert any(s.startswith("motor: backend has no file access") for s in report.steps)
+    assert report.motor == {}
     assert "منوی آنتن" in report.notice
     assert report.to_dict()["receiver_snapshot"] == report.receiver_snapshot
     assert "prune_snapshots" in acts
@@ -818,3 +819,251 @@ def test_api_state_smoke(tmp_path: Path):
         assert "persistence_warning" in payload
     finally:
         server.shutdown()
+
+
+# --- Motor/USALS restore across servicelistreload (fake box with real live_prog) ---
+LIVE_PROG_PATH = "/data/gx/live_prog"
+MOTOR_SATS = ("13.0E Hotbird", "10.0E Eutelsat 10A", "33.0E Unpaired")
+
+
+def fake_live_prog(motor: dict) -> bytes:
+    """Packed (LZO1X) DB with three satellite records; ``motor`` = {name: byte32}."""
+
+    from spidervip.frequency.core import liveprog
+
+    raw = bytearray(400)
+    for i, name in enumerate(MOTOR_SATS):
+        off = i * liveprog.REC
+        raw[off:off + len(name)] = name.encode()
+        raw[off + liveprog.MOTOR_OFF] = motor.get(name, 0x51)
+        raw[off + liveprog.POSITIONER_OFF] = 0xFF
+    return liveprog.pack(bytes(raw))
+
+
+class _MotorBox(SimulatedChannelReceiver):
+    """Simulator plus a shell ``run`` over a modelled ``live_prog`` file.
+
+    Models the box as proven live on 2026-11-11: ``servicelistreload`` clears
+    the Motor bits of every satellite (in memory and in the file it writes); a
+    normal reboot saves the app's in-memory copy over the file, ``reboot -f``
+    does not; after boot the app loads the file.
+    """
+
+    def __init__(self, motor=None, *, live_prog=None, fail_write=False, clear_after_boot=False, **kw):
+        import base64
+        import gzip
+        import hashlib
+
+        super().__init__(**kw)
+        self.b64, self.gz, self.hash = base64, gzip, hashlib
+        data = live_prog if live_prog is not None else fake_live_prog(motor or {})
+        self.files = {LIVE_PROG_PATH: data}
+        self.mem = data  # the app's in-memory DB (as it would save it)
+        self.fail_write = fail_write
+        self.clear_after_boot = clear_after_boot
+        self.live_prog_writes = 0
+        self.cmds = []
+        self._snap_files = {}
+
+    @staticmethod
+    def _clear_motor(data: bytes) -> bytes:
+        from spidervip.frequency.core import liveprog
+
+        raw = bytearray(liveprog.unpack(data))
+        for _name, off in liveprog.satellite_records(bytes(raw)):
+            raw[off + liveprog.MOTOR_OFF] &= ~liveprog.MOTOR_MASK & 0xFF
+        raw[300] = (raw[300] + 1) & 0xFF  # the reload's own change to the DB
+        return liveprog.pack(bytes(raw))
+
+    def commit_service_list(self) -> str:
+        body = super().commit_service_list()
+        self.mem = self._clear_motor(self.files[LIVE_PROG_PATH])
+        self.files[LIVE_PROG_PATH] = self.mem
+        return body
+
+    def reboot(self, *, force: bool = False) -> None:
+        super().reboot(force=force)
+        if not force:
+            self.files[LIVE_PROG_PATH] = self.mem  # clean shutdown saves memory
+        if self.clear_after_boot:
+            self.files[LIVE_PROG_PATH] = self._clear_motor(self.files[LIVE_PROG_PATH])
+        self.mem = self.files[LIVE_PROG_PATH]
+
+    def snapshot_receiver_db(self, label: str = "") -> str:
+        name = super().snapshot_receiver_db(label)
+        self._snap_files[name] = self.files[LIVE_PROG_PATH]
+        return name
+
+    def restore_receiver_snapshot(self, name: str) -> None:
+        super().restore_receiver_snapshot(name)
+        self.files[LIVE_PROG_PATH] = self._snap_files[name]
+
+    def run(self, cmd, timeout=60.0):  # noqa: ARG002
+        import re
+
+        self.cmds.append(cmd)
+        if "GZ_YES" in cmd:
+            return "GZ_YES"
+        m = re.match(r"gzip -c '([^']+)' \| base64", cmd)
+        if m:
+            return self.b64.b64encode(self.gz.compress(self.files[m.group(1)])).decode()
+        if cmd.startswith("md5sum "):
+            path = re.match(r"md5sum '([^']+)'", cmd).group(1)
+            if path not in self.files:
+                return ""
+            data = self.files[path]
+            if self.fail_write and path.endswith(".spidervip.tmp"):
+                data += b"corrupt"
+            return self.hash.md5(data).hexdigest() + "  " + path
+        if cmd.startswith("rm -f"):
+            for path in re.findall(r"'([^']+)'", cmd):
+                self.files.pop(path, None)
+            return ""
+        m = re.match(r"printf '%s' '([^']*)' >> '([^']+)'", cmd)
+        if m:
+            self.files[m.group(2)] = self.files.get(m.group(2), b"") + m.group(1).encode()
+            return ""
+        m = re.match(r"base64 -d '([^']+)' \| gunzip > '([^']+)'", cmd)
+        if m:
+            self.files[m.group(2)] = self.gz.decompress(self.b64.b64decode(self.files.pop(m.group(1))))
+            return ""
+        m = re.match(r"mv -f '([^']+)' '([^']+)'", cmd)
+        if m:
+            if m.group(2) == LIVE_PROG_PATH:
+                self.live_prog_writes += 1
+            self.files[m.group(2)] = self.files.pop(m.group(1))
+            return ""
+        return ""
+
+    def motor_now(self):
+        from spidervip.frequency.core import liveprog
+
+        return liveprog.motor_map(liveprog.unpack(self.files[LIVE_PROG_PATH]))
+
+
+USALS_TWO = {"13.0E Hotbird": 0x59, "33.0E Unpaired": 0x55}
+
+
+def test_apply_restores_motor_after_reload_and_force_reboots(manager: FavoriteManager, no_sleep):
+    from spidervip.frequency.core import liveprog
+
+    fav = _reorder_first_favorite(manager)
+    box = _MotorBox(USALS_TWO)
+    before = box.motor_now()
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+
+    assert report.status == OperationStatus.COMPLETED, report.message
+    assert report.verified is True
+    m = report.motor
+    assert m["saved"] == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert m["restored"] == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert m["verified"] is True and m["manual"] == []
+    # Motor is back on the file the box booted from; the reload's own change stayed.
+    assert box.motor_now() == before == {"13.0E Hotbird": (0x08, 0xFF), "33.0E Unpaired": (0x04, 0xFF)}
+    assert liveprog.unpack(box.files[LIVE_PROG_PATH])[300] == 1
+    assert box.live_prog_writes == 1
+    # Restore is followed by a forced reboot (never a clean one), then a read-back.
+    acts = box.actions
+    assert acts.index("commit_service_list") < acts.index("reboot_force")
+    assert "reboot" not in acts
+    assert any(s.startswith("motor_saved: 2") for s in report.steps)
+    assert any(s.startswith("motor_restored: 2") for s in report.steps)
+    assert any(s.startswith("motor_verify: all 2") for s in report.steps)
+    assert "restored automatically" in report.message
+    assert "خودکار برگردانده" in report.notice and "13.0E Hotbird (USALS)" in report.notice
+    assert report.to_dict()["motor"]["verified"] is True
+    # Favorites still committed and verified after the forced reboot.
+    live = parse_bouquet_files(box.pull_bouquet_files())
+    assert next(f for f in live if f.id == fav.id).channel_refs == manager.get_favorite(fav.id).channel_refs
+
+
+def test_apply_without_motor_restore_loses_motor_on_clean_reboot(manager: FavoriteManager, no_sleep):
+    """Sanity check of the fake: a clean reboot after the reload leaves Motor Off."""
+
+    _reorder_first_favorite(manager)
+    box = _MotorBox(USALS_TWO)
+    box.commit_service_list()
+    box.reboot()
+    assert box.motor_now() == {}
+
+
+def test_apply_motor_forces_reboot_even_without_reboot_flag(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    box = _MotorBox(USALS_TWO)
+    report = SafeApplyPipeline(manager, box).apply(reboot=False)
+    assert report.status == OperationStatus.COMPLETED
+    assert "reboot_force" in box.actions
+    assert report.motor["verified"] is True
+    assert box.motor_now() == {"13.0E Hotbird": (0x08, 0xFF), "33.0E Unpaired": (0x04, 0xFF)}
+
+
+def test_apply_no_motored_satellite_keeps_normal_reboot(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    box = _MotorBox({})
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+    assert report.status == OperationStatus.COMPLETED
+    assert "reboot" in box.actions and "reboot_force" not in box.actions
+    assert box.live_prog_writes == 0
+    assert report.motor["verified"] is True and report.motor["saved"] == []
+    assert "هیچ ماهواره‌ای" in report.notice
+
+
+def test_apply_motor_write_failure_lists_satellites_to_fix(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    box = _MotorBox(USALS_TWO, fail_write=True)
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+    # Favorites are in; only Motor needs a hand.
+    assert report.status == OperationStatus.COMPLETED
+    assert report.verified is True
+    assert box.live_prog_writes == 0  # md5 mismatch: nothing replaced
+    assert report.motor["verified"] is False
+    assert report.motor["manual"] == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert any(s.startswith("motor_restore_failed:") for s in report.steps)
+    assert "NOT fully restored" in report.message
+    for text in ("منوی آنتن", "13.0E Hotbird (USALS)", "33.0E Unpaired (Motor)", "برگشت به snapshot"):
+        assert text in report.notice
+
+
+def test_apply_motor_verify_mismatch_after_boot_lists_satellites(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    box = _MotorBox(USALS_TWO, clear_after_boot=True)
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+    assert report.status == OperationStatus.COMPLETED
+    assert box.live_prog_writes == 1
+    assert report.motor["verified"] is False
+    assert report.motor["manual"] == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert any(s.startswith("motor_verify: differs") for s in report.steps)
+    assert "13.0E Hotbird" in report.notice and "منوی آنتن" in report.notice
+
+
+def test_apply_motor_read_failure_falls_back_to_profile_note(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    manager.set_motor_profile({"satellites": [{"position": "26.0E", "motor_type": "usals"}]})
+    box = _MotorBox(live_prog=b"\x10\x00\x00\x00not-lzo")
+    box.commit_service_list = SimulatedChannelReceiver.commit_service_list.__get__(box)
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+    assert report.status == OperationStatus.COMPLETED
+    assert any(s.startswith("motor_read_failed:") for s in report.steps)
+    assert "reboot" in box.actions and "reboot_force" not in box.actions
+    assert report.motor["read"] is False and report.motor["verified"] is False
+    assert "منوی آنتن" in report.notice and "26.0E" in report.notice
+
+
+class _RejectingMotorBox(_MotorBox):
+    def commit_service_list(self) -> str:
+        _RejectingCommitReceiver.commit_service_list(self)
+        self.mem = self._clear_motor(self.files[LIVE_PROG_PATH])
+        self.files[LIVE_PROG_PATH] = self.mem
+        return "<e2state>True</e2state>"
+
+
+def test_apply_rollback_brings_motor_back_with_snapshot(manager: FavoriteManager, no_sleep):
+    _reorder_first_favorite(manager)
+    box = _RejectingMotorBox(USALS_TWO)
+    before = box.motor_now()
+    report = SafeApplyPipeline(manager, box).apply(reboot=True)
+    assert report.status == OperationStatus.FAILED and report.rolled_back is True
+    assert box.live_prog_writes == 0  # verify failed before the Motor write
+    assert box.motor_now() == before
+    assert report.motor["verified"] is True
+    assert "تأیید شد" in report.notice

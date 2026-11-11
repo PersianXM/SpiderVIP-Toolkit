@@ -760,6 +760,10 @@ dialog {
   line-height: 1.8;
   font-size: 0.9rem;
 }
+.motor-notice.ok {
+  border-color: var(--ok, #2e9d5b);
+  background: color-mix(in srgb, var(--ok, #2e9d5b) 12%, transparent);
+}
 .rollback-block { margin-top: 14px; }
 .rollback-block h4 { margin: 0 0 4px; font-size: 0.9rem; }
 .rollback-block select { min-width: 0; flex: 1 1 220px; }
