@@ -285,6 +285,7 @@ def _cmd_console(args: argparse.Namespace) -> int:
         receiver_password=getattr(args, "password", "root") or "root",
         workspace=args.workspace,
         catalog_url=args.catalog,
+        allow_remote=bool(getattr(args, "allow_remote", False)),
     )
     return 0
 
@@ -302,6 +303,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_console.add_argument("--user", default="root", help="receiver username (default: root)")
     p_console.add_argument("--password", default="root", help="receiver password (default: root)")
     p_console.add_argument("--bind", default="127.0.0.1", help="console bind address")
+    p_console.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="allow a non-loopback --bind (exposes the receiver password and Apply on the network)",
+    )
     p_console.add_argument("--http-port", type=int, default=8787, help="console HTTP port")
     p_console.add_argument("--workspace", help="channels workspace directory")
     p_console.add_argument("--catalog", help="channels update catalog URL or file path")

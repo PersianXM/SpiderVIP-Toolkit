@@ -22,6 +22,7 @@
     if (conn.host != null) $("connHost").value = conn.host;
     if (conn.user != null) $("connUser").value = conn.user;
     if (conn.password != null) $("connPass").value = conn.password;
+    if (conn.simulate != null) $("connSimulate").checked = !!conn.simulate;
   }
 
   async function api(path, opts = {}) {
@@ -82,6 +83,11 @@
       fillForm(data.connection);
       const probe = data.probe || {};
       setPill(!!probe.online, probe.online ? "وضعیت: آنلاین" : "وضعیت: آفلاین");
+      const chErr = data.channels && data.channels.ok === false ? data.channels.error || "" : "";
+      if (chErr) {
+        showStatus("ذخیره شد، ولی " + chErr, false);
+        return;
+      }
       const ch = data.channels && data.channels.status ? data.channels.status.label : "";
       showStatus((probe.label || "ذخیره شد") + (ch ? " — " + ch : ""), !!probe.online || !!readForm().simulate);
     } catch (err) {

@@ -14,9 +14,19 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlencode
 
-from .connection import ConnectionStore, ReceiverConnection, probe_connection
+from .connection import TOOLKIT_ROOT, ConnectionStore, ReceiverConnection, probe_connection
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+# Same anchoring as the connection store: independent of the caller's cwd.
+DEFAULT_CHANNELS_WORKSPACE = TOOLKIT_ROOT / ".spidervip_channels"
+FREQUENCY_MODULE_NAME = "spidervip_frequency_app"
+
+_LOOPBACK_BINDS = {"127.0.0.1", "localhost", "::1"}
+
+
+def _is_loopback_bind(host: str) -> bool:
+    h = (host or "").strip().lower().strip("[]")
+    return h in _LOOPBACK_BINDS or h.startswith("127.")
 
 
 def _free_port() -> int:
@@ -44,7 +54,7 @@ def _start_channels_backend(
         receiver_host=receiver_host,
         receiver_user=receiver_user,
         receiver_password=receiver_password,
-        workspace=Path(workspace) if workspace else None,
+        workspace=Path(workspace) if workspace else DEFAULT_CHANNELS_WORKSPACE,
         catalog_url=catalog_url,
     )
     thread = threading.Thread(target=server.serve_forever, name="channels-backend", daemon=True)
@@ -52,14 +62,41 @@ def _start_channels_backend(
     return server, port
 
 
-def _start_frequency_backend() -> Tuple[Any, int]:
+def _load_frequency_flask_app():
+    """Load spidervip/frequency/app.py under a unique module name.
+
+    A bare ``from app import app`` picks up whatever top-level ``app`` module
+    is first on sys.path (or already imported), not necessarily this file.
+    The frequency dir stays on sys.path because app.py imports its siblings
+    (scraper, receiver, deploy) by bare name.
+    """
+    import importlib.util
     import sys
 
     freq_dir = Path(__file__).resolve().parents[1] / "frequency"
     if str(freq_dir) not in sys.path:
         sys.path.insert(0, str(freq_dir))
 
-    from app import app as freq_app  # type: ignore  # noqa: WPS433
+    existing = sys.modules.get(FREQUENCY_MODULE_NAME)
+    if existing is not None:
+        return existing.app
+
+    spec = importlib.util.spec_from_file_location(FREQUENCY_MODULE_NAME, freq_dir / "app.py")
+    if spec is None or spec.loader is None:  # pragma: no cover
+        raise SystemExit(f"Cannot load frequency app from {freq_dir / 'app.py'}")
+    module = importlib.util.module_from_spec(spec)
+    # Register before exec: Flask resolves root_path (templates/) via sys.modules.
+    sys.modules[FREQUENCY_MODULE_NAME] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(FREQUENCY_MODULE_NAME, None)
+        raise
+    return module.app
+
+
+def _start_frequency_backend() -> Tuple[Any, int]:
+    freq_app = _load_frequency_flask_app()
 
     port = _free_port()
     try:
@@ -236,20 +273,29 @@ def _proxy_to_backend(
         return Response(raw, status=resp.status, headers=out_headers)
     except Exception as exc:  # noqa: BLE001 — never return Flask HTML 500 to module UIs
         exc_s = str(exc).lower()
-        timed_out = "timed out" in exc_s or "timeout" in exc_s
+        timed_out = isinstance(exc, TimeoutError) or "timed out" in exc_s or "timeout" in exc_s
         hint = f"mount={mount} path={path} backend_port={backend_port} timeout={timeout}s"
+        payload: Dict[str, Any] = {
+            "ok": False,
+            "error": f"پراکسی کنسول به بک‌اند ناموفق بود: {exc}",
+            "hint": hint,
+        }
         if timed_out:
-            hint += (
-                " — انتقال ممکن است هنوز روی بک‌اند در حال اجرا باشد؛ "
-                "کنسول را ری‌استارت کنید و دوباره تلاش کنید."
-            )
-        return jsonify(
-            {
-                "ok": False,
-                "error": f"پراکسی کنسول به بک‌اند ناموفق بود: {exc}",
-                "hint": hint,
-            }
-        ), 502
+            # Only the proxy gave up: the backend handler keeps running (e.g. an
+            # Apply that is committing live_prog or rebooting the receiver).
+            # Restarting the Console now would kill that operation mid-way.
+            payload["timed_out"] = True
+            payload["still_running_possible"] = True
+            if method.upper() != "GET":
+                payload["error"] = (
+                    "کنسول منتظر پاسخ نماند، ولی عملیات ممکن است هنوز روی بک‌اند در حال اجرا باشد."
+                )
+                payload["hint"] = (
+                    "کنسول را نبندید و دوباره ارسال نکنید. چند دقیقه صبر کنید، سپس صفحه را رفرش کنید؛ "
+                    "در صفحهٔ کانال‌ها نتیجهٔ آخرین Apply در وضعیت (apply) نمایش داده می‌شود. — "
+                    + hint
+                )
+        return jsonify(payload), 504 if timed_out else 502
     finally:
         if conn is not None:
             try:
@@ -304,7 +350,15 @@ def create_console_app(
 
     store = connection_store or ConnectionStore()
     if receiver_host:
-        store.set(host=receiver_host, user=receiver_user, password=receiver_password, persist=True)
+        # An explicit CLI host means live channels; keep the stored mode in step
+        # so the Channels page does not flip back to the simulator on load.
+        store.set(
+            host=receiver_host,
+            user=receiver_user,
+            password=receiver_password,
+            simulate=False,
+            persist=True,
+        )
     seed = store.get()
 
     # If CLI provided a live host, start channels live; otherwise keep simulate until UI connects.
@@ -368,14 +422,22 @@ def create_console_app(
             host=data.get("host"),
             user=data.get("user"),
             password=data.get("password"),
+            simulate=bool(data.get("simulate", False)),
             persist=True,
         )
-        use_sim = bool(data.get("simulate", False))
-        pushed = _push_connection_to_channels(channels_port, conn, simulate=use_sim)
+        try:
+            pushed = _push_connection_to_channels(channels_port, conn, simulate=conn.simulate)
+        except Exception as exc:  # noqa: BLE001 — shell expects JSON, never an HTML 500
+            pushed = {
+                "ok": False,
+                "error": f"ارسال اتصال به بک‌اند کانال‌ها ناموفق بود: {exc}",
+            }
         probe = probe_connection(conn)
         return jsonify(
             {
-                "ok": True,
+                # Saved to disk either way; ok reflects whether Channels took it too.
+                "ok": bool(pushed.get("ok", True)),
+                "saved": True,
                 "connection": conn.public_dict(),
                 "probe": probe,
                 "channels": pushed,
@@ -448,7 +510,22 @@ def run_console(
     receiver_password: str = "root",
     workspace: Optional[str] = None,
     catalog_url: Optional[str] = None,
+    allow_remote: bool = False,
 ) -> None:
+    # Every page carries the receiver password (window.SPIDERVIP_CONNECTION and
+    # GET /api/connection), and the Console can Apply/reboot the receiver with no
+    # login of its own. That is fine on loopback only.
+    if not _is_loopback_bind(host):
+        if not allow_remote:
+            raise SystemExit(
+                f"Refusing to bind SpiderVIP Console to {host!r}: the receiver password and "
+                "Apply/reboot controls would be open to the network without a login. "
+                "Use --bind 127.0.0.1, or pass --allow-remote if you really mean it."
+            )
+        print(
+            f"WARNING: Console bound to {host} — anyone on this network can read the receiver "
+            "password and run Apply/reboot."
+        )
     app = create_console_app(
         simulate=simulate,
         receiver_host=receiver_host,

@@ -6,4 +6,4 @@ Bump rules (see .cursor/rules/spidervip-versioning.mdc):
 - PATCH — fixes, polish, docs that affect the running app
 """
 
-__version__ = "0.9.6"
+__version__ = "0.9.7"

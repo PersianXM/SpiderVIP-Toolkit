@@ -38,7 +38,9 @@
           host: c.host,
           user: c.user || "root",
           password: c.password != null ? c.password : "root",
-          simulate: false,
+          // Honour the Console shell's simulator choice (was hardcoded false,
+          // which flipped the backend to live on every page load).
+          simulate: !!c.simulate,
         }),
       });
     } catch (_) {
