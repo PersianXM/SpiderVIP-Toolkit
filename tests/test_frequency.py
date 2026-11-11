@@ -265,25 +265,48 @@ def test_source_validation():
 
 
 # --------------------------------------------------------------------- deploy (fake box)
+def fake_live_prog(motor: dict) -> bytes:
+    """Packed DB with the _fixture satellites; ``motor`` = {name: byte32}."""
+
+    from spidervip.frequency.core import liveprog
+
+    raw = bytearray(400)
+    for i, name in enumerate(("13.0E Hotbird", "10.0E Eutelsat 10A", "33.0E Unpaired")):
+        off = i * liveprog.REC
+        raw[off:off + len(name)] = name.encode()
+        raw[off + liveprog.MOTOR_OFF] = motor.get(name, 0x51)
+        raw[off + liveprog.POSITIONER_OFF] = 0xFF
+    return liveprog.pack(bytes(raw))
+
+
 class FakeBox:
     """Minimal stand-in for LiveChannelReceiver that models the box files."""
 
-    def __init__(self, sat_xml: bytes):
+    def __init__(self, sat_xml: bytes, motor: dict = None):
         import base64, gzip, hashlib  # noqa: E401
         self.b64, self.gz, self.hash = base64, gzip, hashlib
-        self.files = {"/data/gx/local/enigma_db/satellites.xml": sat_xml, "/data/gx/live_prog": b"LP1",
+        self.files = {"/data/gx/local/enigma_db/satellites.xml": sat_xml,
+                      "/data/gx/live_prog": fake_live_prog(motor or {}),
                       "/data/gx/local/enigma_db/lamedb": LAMEDB.encode()}
         self.cmds = []
         self.reloads = 0
         self.live_prog_writes = []
+        self.reboots = []
 
     # LiveChannelReceiver API used by the deployer
     def connect(self): pass
     def close(self): pass
 
     def commit_service_list(self):
+        """Like the box: commit changes live_prog and clears every Motor setting."""
+        from spidervip.frequency.core import liveprog
+
         self.reloads += 1
-        self.files["/data/gx/live_prog"] = b"LP-COMMITTED-" + self.files["/data/gx/local/enigma_db/satellites.xml"][:20]
+        raw = bytearray(liveprog.unpack(self.files["/data/gx/live_prog"]))
+        for _name, off in liveprog.satellite_records(bytes(raw)):
+            raw[off + liveprog.MOTOR_OFF] &= ~liveprog.MOTOR_MASK & 0xFF
+        raw[300] = (raw[300] + 1) & 0xFF
+        self.files["/data/gx/live_prog"] = liveprog.pack(bytes(raw))
         return "<e2state>True</e2state>"
 
     def run(self, cmd, timeout=60.0):
@@ -329,6 +352,11 @@ class FakeBox:
             return ""
         if cmd.startswith("awk"):
             return "CH 512 500"
+        if cmd.startswith("stat -c"):
+            return "1000 4000 1000 9000"
+        if "reboot" in cmd:
+            self.reboots.append(cmd)
+            return ""
         return ""
 
 
@@ -338,7 +366,48 @@ LAMEDB_SHA = __import__("hashlib").sha256(LAMEDB.encode()).hexdigest()
 def _deployer(box: FakeBox, **kw):
     from spidervip.frequency.deploy import FrequencyDeployer
 
-    return FrequencyDeployer("10.0.0.1", rx_factory=lambda *a: box, sleep=lambda s: None, **kw)
+    now = [0.0]
+
+    def sleep(s):
+        now[0] += s
+
+    return FrequencyDeployer("10.0.0.1", rx_factory=lambda *a: box, sleep=sleep, clock=lambda: now[0],
+                             probe=lambda *a, **k: True, **kw)
+
+
+def test_deploy_restores_motor_after_reload_and_force_reboots():
+    import hashlib
+
+    from spidervip.frequency.core import liveprog
+
+    box_xml, src = _fixture()
+    p = plan.build(box_xml, src, lamedb_data=LAMEDB.encode())
+    res = plan.apply(box_xml, p, plan.default_selection(p))
+    fake = FakeBox(box_xml, motor={"13.0E Hotbird": 0x59, "33.0E Unpaired": 0x55})
+    out = _deployer(fake).deploy(res["xml"], expected_box_sha=hashlib.sha256(box_xml).hexdigest(),
+                                 expected_lamedb_sha=LAMEDB_SHA, reboot_verify=True)
+    assert fake.reloads == 1
+    assert out["motor"]["saved"] == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert sorted(out["motor"]["restored"]) == ["13.0E Hotbird", "33.0E Unpaired"]
+    assert out["motor"]["verified"] is True and out["ok"] is True, out
+    raw = liveprog.unpack(fake.files["/data/gx/live_prog"])
+    assert liveprog.motor_map(raw) == {"13.0E Hotbird": (0x08, 0xFF), "33.0E Unpaired": (0x04, 0xFF)}
+    assert raw[300] == 1                                # the reload's own change was kept
+    assert len(fake.live_prog_writes) == 1
+    assert len(fake.reboots) == 1 and "reboot -f" in fake.reboots[0]
+
+
+def test_liveprog_motor_roundtrip():
+    from spidervip.frequency.core import liveprog
+
+    raw = liveprog.unpack(fake_live_prog({"10.0E Eutelsat 10A": 0x59}))
+    saved = liveprog.motor_map(raw)
+    assert saved == {"10.0E Eutelsat 10A": (0x08, 0xFF)}
+    cleared = bytearray(raw)
+    cleared[52 + liveprog.MOTOR_OFF] = 0x51
+    back, restored, missing = liveprog.restore_motor(bytes(cleared), dict(saved, **{"9.9E Gone": (8, 255)}))
+    assert back == raw and restored == ["10.0E Eutelsat 10A"] and missing == ["9.9E Gone"]
+    assert liveprog.motor_differences(back, saved) == []
 
 
 def test_deploy_snapshots_before_upload_and_never_writes_live_prog():

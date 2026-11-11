@@ -1,10 +1,14 @@
 """Apply a new satellites.xml on the receiver as one guarded transaction (PC side).
 
 Facts this relies on (live device, see docs/frequency/README.md):
-  * ``/data/gx/live_prog`` is the binary master DB. It is LZ-compressed
-    (header = 32-bit LE unpacked size; only ~4 of 227 satellite names appear
-    as plain text), so this module NEVER edits it byte-wise — it is only
-    copied whole into a snapshot.
+  * ``/data/gx/live_prog`` is the binary master DB: a 32-bit LE unpacked size
+    plus one LZO1X stream (``core/lzo1x.py``). It is never patched byte-wise
+    in its compressed form; the only edit is the Motor restore below, done on
+    the fully unpacked DB, re-packed, verified, and written whole.
+  * Every ``servicelistreload`` sets each satellite's Motor type to Off. The
+    Motor bits live in the 52-byte satellite records of the unpacked DB
+    (``core/liveprog.py``); they are saved before the reload, copied back
+    afterwards, and the box is force-rebooted so it loads them.
   * ``/data/gx/local/enigma_db/satellites.xml`` is an export the app writes
     from ``live_prog``. ``GET /web/servicelistreload?mode=0`` makes the app
     re-read the exports and commit them into ``live_prog``.
@@ -16,8 +20,10 @@ Transaction:
   2. snapshot   — whole ``live_prog`` + ``enigma_db`` copied under /data
   3. upload     — new satellites.xml (gzip+base64 over Telnet), md5 verified
   4. commit     — servicelistreload; on failure the old export is put back
-  5. verify     — reboot, wait, read the export back, compare every TP;
-                  channel count (lamedb services) before/after is reported
+  4b. motor     — copy the saved Motor settings back into live_prog
+  5. verify     — (forced) reboot, wait, read the export back, compare every
+                  TP and every satellite's Motor setting; unique channels
+                  and Favorite changes are reported
 Rollback re-imports a snapshot's exports the same way (or, ``hard``, copies
 the whole ``live_prog`` back and force-reboots).
 """
@@ -31,7 +37,7 @@ import hashlib
 import time
 from typing import Callable, Dict, List, Optional
 
-from .core import satxml
+from .core import liveprog, satxml
 
 ENIGMA_DB = "/data/gx/local/enigma_db"
 SAT_XML = f"{ENIGMA_DB}/satellites.xml"
@@ -199,11 +205,13 @@ def compare_lists(expected: bytes, actual: bytes) -> Dict[str, object]:
 class FrequencyDeployer:
     def __init__(self, host: str, user: str = "root", password: str = "root", *,
                  progress: Optional[Progress] = None, rx_factory=None, sleep=time.sleep,
-                 boot_timeout: float = 480.0):
+                 clock=time.time, probe=None, boot_timeout: float = 480.0):
         self.host, self.user, self.password = host, user, password
         self.progress = progress or (lambda step, state, msg: None)
         self.rx_factory = rx_factory or _default_rx_factory
         self.sleep = sleep
+        self.clock = clock
+        self.probe = probe
         self.boot_timeout = boot_timeout
         self.steps: List[Dict[str, str]] = []
 
@@ -230,11 +238,13 @@ class FrequencyDeployer:
             pass
         self._log("reboot", "running", "رسیور در حال راه‌اندازی دوباره است (ممکن است تا چند دقیقه طول بکشد)…")
         self.sleep(20.0)
-        from spidervip.channels.telnet_ftp import probe_tcp
+        probe_tcp = self.probe
+        if probe_tcp is None:
+            from spidervip.channels.telnet_ftp import probe_tcp
 
-        deadline = time.time() + self.boot_timeout
+        deadline = self.clock() + self.boot_timeout
         rx2 = None
-        while time.time() < deadline:
+        while self.clock() < deadline:
             if probe_tcp(self.host, 23, timeout=2.0):
                 try:
                     rx2 = self._connect()
@@ -249,12 +259,12 @@ class FrequencyDeployer:
         return rx2
 
     def _wait_export_settled(self, rx, *, timeout: float = 150.0, stable_for: float = 8.0) -> None:
-        deadline = time.time() + timeout
+        deadline = self.clock() + timeout
         last, since = None, None
-        while time.time() < deadline:
+        while self.clock() < deadline:
             sig = " ".join(rx.run(f"stat -c '%Y %s' {_q(LIVE_PROG)} {_q(SAT_XML)} 2>/dev/null",
                                   timeout=15.0).split())
-            now = time.time()
+            now = self.clock()
             if sig and sig == last:
                 if since is not None and now - since >= stable_for:
                     return
@@ -294,6 +304,28 @@ class FrequencyDeployer:
     def _restore_export(self, rx, snap: str) -> None:
         rx.run(f"cp -f {_q(SNAP_ROOT + '/' + snap + '/enigma_db/satellites.xml')} {_q(SAT_XML)} && sync",
                timeout=30.0)
+
+    def _restore_motor(self, rx, files: "BoxFiles", saved: Dict[str, "liveprog.Motor"],
+                       result: Dict[str, object]) -> bool:
+        """Copy saved Motor settings back into the post-reload live_prog (whole file)."""
+
+        self._log("motor", "running", "برگرداندن تنظیم Motor در live_prog…")
+        try:
+            # Let the app finish writing live_prog after the reload before we touch it.
+            self._wait_export_settled(rx, timeout=60.0, stable_for=6.0)
+            raw = liveprog.unpack(files.read(LIVE_PROG))
+            patched, restored, missing = liveprog.restore_motor(raw, saved)
+            result["motor"]["restored"] = restored
+            result["motor"]["missing"] = missing
+            if restored:
+                files.write(LIVE_PROG, liveprog.pack(patched))
+            self._log("motor", "ok" if not missing else "warn",
+                      f"Motor {len(restored)} ماهواره برگردانده شد"
+                      + (f"؛ پیدا نشد: {'، '.join(missing)}" if missing else "") + ".")
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self._log("motor", "fail", f"برگرداندن خودکار Motor ناموفق بود: {exc}")
+            return False
 
     def _commit(self, rx, snap: str) -> None:
         try:
@@ -358,6 +390,17 @@ class FrequencyDeployer:
             if hashlib.sha256(lamedb_now).hexdigest() != expected_lamedb_sha:
                 raise DeployError("کانال‌های رسیور (lamedb) از زمان «بررسی» عوض شده‌اند؛ دوباره «بررسی تغییرات» را بزنید.")
             result["motor_check_sats"] = motor_check_sats(new_xml, lamedb_now)
+            # Motor/USALS lives only in live_prog and every reload clears it; keep a copy.
+            motor_saved: Dict[str, liveprog.Motor] = {}
+            try:
+                motor_saved = liveprog.motor_map(liveprog.unpack(files.read(LIVE_PROG)))
+                self._log("motor", "ok", f"تنظیم Motor {len(motor_saved)} ماهواره خوانده شد: "
+                                         + ("، ".join(motor_saved) or "—"))
+            except Exception as exc:  # noqa: BLE001 — never block the update on this
+                self._log("motor", "warn", f"خواندن تنظیم Motor از live_prog ممکن نشد ({exc}); "
+                                           "بعد از اعمال باید دستی برگردانده شود.")
+            result["motor"] = {"saved": sorted(motor_saved), "restored": [], "missing": [],
+                               "verified": not motor_saved}
             st_before = channel_stats(rx)
             ch_before = st_before["unique"]
             result["channels_before"] = ch_before
@@ -385,14 +428,31 @@ class FrequencyDeployer:
             self._log("commit", "running", "درخواست ثبت لیست جدید در رسیور (servicelistreload)…")
             self._commit(rx, snap)
 
-            if not reboot_verify:
+            motor_patched = False
+            if motor_saved:
+                motor_patched = self._restore_motor(rx, files, motor_saved, result)
+                # A patched live_prog only survives a forced reboot (a normal shutdown
+                # lets the app save its in-memory copy, with Motor Off, over it).
+                rx = self._reboot_and_wait(rx, force=True)
+                files = BoxFiles(rx)
+                if motor_patched:
+                    diff = liveprog.motor_differences(liveprog.unpack(files.read(LIVE_PROG)), motor_saved)
+                    result["motor"]["verified"] = not diff
+                    if diff:
+                        self._log("motor", "fail", "Motor این ماهواره‌ها برنگشت؛ در منوی آنتن دستی USALS کنید: "
+                                                   + "، ".join(diff))
+                    else:
+                        self._log("motor", "ok", f"Motor همهٔ {len(motor_saved)} ماهواره پس از راه‌اندازی تأیید شد.")
+
+            if not reboot_verify and not motor_saved:
                 self._prune(rx)
                 result["ok"] = True
                 self._log("done", "warn", "اعمال شد، ولی بدون راه‌اندازی دوباره تأیید نهایی انجام نشد.")
                 return result
 
-            rx = self._reboot_and_wait(rx)
-            files = BoxFiles(rx)
+            if not motor_saved:
+                rx = self._reboot_and_wait(rx)
+                files = BoxFiles(rx)
             self._log("verify", "running", "خواندن لیست واقعی رسیور پس از راه‌اندازی و مقایسه…")
             actual = files.read(SAT_XML)
             cmp = compare_lists(new_xml, actual)
@@ -422,11 +482,14 @@ class FrequencyDeployer:
             if channels_ok and eb is not None and ea is not None and ea < eb:
                 self._log("channels", "warn",
                           f"{eb - ea} ردیف تکراری کانال حذف شد (هر کانال یک بار ماند؛ رسیور هنگام ثبت تکراری‌ها را یکی می‌کند).")
-            if result.get("motor_check_sats"):
+            if not result["motor"]["verified"]:
+                names = result["motor"]["saved"] or result.get("motor_check_sats") or []
                 self._log("motor", "warn",
-                          "ثبت لیست، نوع Motor هر ماهواره را Off می‌کند (طول/عرض محل USALS می‌ماند). در منوی آنتن "
-                          "برای این ماهواره‌ها Motor type را دوباره USALS کنید: "
-                          + "، ".join(result["motor_check_sats"]))
+                          "ثبت لیست، نوع Motor ماهواره‌ها را Off کرد و برگرداندن خودکار کامل نشد. در منوی آنتن "
+                          "Motor type این ماهواره‌ها را دوباره USALS کنید: " + "، ".join(names))
+                if result["ok"]:
+                    result["ok"] = False
+                    result["error"] = "Motor خودکار برنگشت؛ دستی برگردانید."
             for f in favs:
                 if f["changed"]:
                     self._log("favorites", "warn",
