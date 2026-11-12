@@ -94,12 +94,32 @@
     const w = $("warnings");
     w.innerHTML = (p.warnings || []).map((x) => `<li>${esc(x)}</li>`).join("");
     w.hidden = !(p.warnings || []).length;
-    $("unmatchedSummary").textContent = `${fa(p.unmatched.length)} ماهوارهٔ رسیور در منبع جفت ندارند (دست‌نخورده می‌مانند)`;
-    $("unmatchedList").innerHTML = p.unmatched
-      .slice().sort((a, b) => b.box_count - a.box_count)
-      .map((u) => `<li><span class="ltr">${esc(u.position_label)}</span> ${esc(u.name)} <small>(${esc(u.band)} · ${fa(u.box_count)} TP)</small></li>`).join("");
+    renderSatLists();
     renderTable();
     renderSelSummary();
+  }
+
+  function renderSatLists() {
+    const p = state.plan;
+    const ns = p.new_sats || [];
+    const box = (id, label) => `<input type="checkbox" data-satrow="${esc(id)}" ${state.selected.has(id) ? "checked" : ""} aria-label="${esc(label)}" />`;
+    $("newSatsSummary").textContent = `${fa(ns.length)} ماهوارهٔ تازه در منبع (${fa(ns.filter((s) => state.selected.has(s.id)).length)} انتخاب‌شده)`;
+    $("newSatsList").innerHTML = ns.slice().sort((a, b) => a.position - b.position)
+      .map((s) => `<li><label>${box(s.id, "افزودن " + s.name)} <span class="ltr">${esc(s.position_label)}</span> ${esc(s.name)} <small>(${esc(s.band)} · ${fa(s.count)} TP)</small></label></li>`).join("");
+    const rem = p.unmatched.filter((u) => u.removable && state.selected.has(u.id)).length;
+    $("unmatchedSummary").textContent = `${fa(p.unmatched.length)} ماهوارهٔ رسیور در منبع جفت ندارند (${fa(rem)} برای حذف انتخاب‌شده)`;
+    $("unmatchedList").innerHTML = p.unmatched
+      .slice().sort((a, b) => b.box_count - a.box_count)
+      .map((u) => `<li>${u.removable ? `<label>${box(u.id, "حذف " + u.name)} ` : ""}<span class="ltr">${esc(u.position_label)}</span> ${esc(u.name)} <small>(${esc(u.band)} · ${fa(u.box_count)} TP${u.channels ? " · دارای کانال، حذف نمی‌شود" : ""})</small>${u.removable ? "</label>" : ""}</li>`).join("");
+  }
+
+  for (const id of ["newSatsList", "unmatchedList"]) {
+    $(id).addEventListener("change", (ev) => {
+      const el = ev.target;
+      if (!el.dataset.satrow) return;
+      el.checked ? state.selected.add(el.dataset.satrow) : state.selected.delete(el.dataset.satrow);
+      saveSel(); renderSatLists(); renderSelSummary();
+    });
   }
 
   function satMatches(sat, q) {
@@ -174,11 +194,16 @@
     if (!p) return;
     let c = 0, n = 0, g = 0;
     for (const s of p.sats) { c += selectedCount(s, "changed"); n += selectedCount(s, "new"); g += selectedCount(s, "gone"); }
-    const after = p.box.tps + n - g;
-    $("selSummary").innerHTML = `انتخاب فعلی: <b>${fa(c)}</b> اصلاح، <b>${fa(n)}</b> TP جدید، <b>${fa(g)}</b> حذف — تعداد TP رسیور ${fa(p.box.tps)} → <b>${fa(after)}</b>`;
-    $("btnDeploy").disabled = !(c || n || g);
-    $("btnDownload").disabled = !(c || n || g);
-    $("confirmText").textContent = `${fa(c)} اصلاح، ${fa(n)} TP جدید و ${fa(g)} حذف روی رسیور ${conn().host} اعمال شود؟`;
+    const addS = (p.new_sats || []).filter((s) => state.selected.has(s.id));
+    const remS = p.unmatched.filter((u) => u.removable && state.selected.has(u.id));
+    const sa = addS.length, sr = remS.length;
+    const after = p.box.tps + n - g + addS.reduce((a, s) => a + s.count, 0) - remS.reduce((a, u) => a + u.box_count, 0);
+    const satTxt = sa || sr ? `، <b>${fa(sa)}</b> ماهوارهٔ تازه، <b>${fa(sr)}</b> ماهوارهٔ حذفی` : "";
+    $("selSummary").innerHTML = `انتخاب فعلی: <b>${fa(c)}</b> اصلاح، <b>${fa(n)}</b> TP جدید، <b>${fa(g)}</b> حذف${satTxt} — تعداد TP رسیور ${fa(p.box.tps)} → <b>${fa(after)}</b>`;
+    const any = c || n || g || sa || sr;
+    $("btnDeploy").disabled = !any;
+    $("btnDownload").disabled = !any;
+    $("confirmText").textContent = `${fa(c)} اصلاح، ${fa(n)} TP جدید، ${fa(g)} حذف، ${fa(sa)} ماهوارهٔ تازه و ${fa(sr)} ماهوارهٔ حذفی روی رسیور ${conn().host} اعمال شود؟`;
     // reflect mixed state on per-sat checkboxes
     document.querySelectorAll("input[data-mixed]").forEach((el) => { el.indeterminate = true; });
   }
@@ -274,7 +299,7 @@
         if (mode === "allgone") state.selected.add(id); else state.selected.delete(id);
       }
     }
-    saveSel(); renderTable(); renderSelSummary();
+    saveSel(); renderSatLists(); renderTable(); renderSelSummary();
   });
 
   $("satBody").addEventListener("click", (ev) => {

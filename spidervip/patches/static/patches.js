@@ -17,8 +17,10 @@
       (b.counts.changed + b.counts.new + b.counts.gone) - (a.counts.changed + a.counts.new + a.counts.gone)).slice(0, 12)
       .map((s) => `<tr><th scope="row">${esc(s.name)}</th><td>${fa(s.counts.changed)}</td><td>${fa(s.counts.new)}</td><td>${fa(s.counts.gone)}${s.deletions_preselected ? "" : " *"}</td></tr>`).join("");
     const sm = r.summary || {};
+    const satList = (title, n, tps, list) => (n ? `<details class="pt-sats"><summary><b>${title}:</b> ${fa(n)} ماهواره، ${fa(tps)} TP</summary>
+      <p class="ltr">${(list || []).map((s) => `${esc(s.name)} (${fa(s.tps)})`).join(" · ")}</p></details>` : "");
     const RES = {
-      applied: `<p class="pt-res pt-ok">اعمال و تأیید شد: ${fa(sm.changed)} اصلاح، ${fa(sm.new)} جدید، ${fa(sm.gone)} حذف (TP: ${fa(sm.tps_before)} ← ${fa(sm.tps_after)})؛
+      applied: `<p class="pt-res pt-ok">اعمال و تأیید شد: ${fa(sm.changed)} اصلاح، ${fa(sm.new)} جدید، ${fa(sm.gone)} حذف، ${fa((sm.sats_added || []).length)} ماهوارهٔ تازه، ${fa((sm.sats_removed || []).length)} ماهوارهٔ حذف‌شده (TP: ${fa(sm.tps_before)} ← ${fa(sm.tps_after)})؛
         ${fa(r.channels_removed)} کانال و ${fa(r.favorite_entries_removed)} خانهٔ Favorite همراه TPهای حذف‌شده رفتند؛ Motor ${fa((r.motor_restored || []).length)} ماهواره برگشت.
         ${r.verified_time ? `تأیید: ${esc(r.verified_time.replace("T", " "))}` : ""}</p>`,
       rolled_back: `<p class="pt-res pt-warn">اعمال شد ولی تأیید نشد و رسیور به snapshot برگشت${r.rollback_ok === false ? " (بررسی برگشت هم مشکل داشت!)" : ""}: ${esc((r.problems || []).join("؛ "))}</p>`,
@@ -44,6 +46,8 @@
         منبع ساخته‌شده ${esc((src.created || "—").replace("T", " "))} · رسیور ${fa(box.tps)} TP / ${fa(box.channels)} کانال</p>
       <p>${r.mode === "apply" ? "برنامهٔ این اجرا" : "اگر اعمال می‌شد"}: <b>${fa(w.changed)}</b> اصلاح، <b>${fa(w.new)}</b> TP جدید، <b>${fa(w.removed)}</b> حذف؛
         ${fa(w.protected)} TP دارای کانال که فقط پارامترشان عوض شده، دست‌نخورده (برای به‌روز کردن، روی رسیور اسکن کنید).</p>
+      ${satList("ماهوارهٔ تازه (با USALS)", w.sats_new, w.sats_new_tps, r.new_sats)}
+      ${satList("حذف ماهوارهٔ بدون کانال (در منبع نیست)", w.sats_removed, w.sats_removed_tps, r.removed_sats)}
       ${rows ? `<div class="pt-table-wrap"><table class="pt-table"><thead><tr><th>ماهواره</th><th>اصلاح</th><th>جدید</th><th>نبودن در منبع</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="pt-meta">* حذف‌های این ماهواره پیش‌انتخاب نمی‌شوند (منبع ناقص به نظر می‌رسد). ۱۲ ماهوارهٔ پرتغییر نمایش داده شده‌اند.</p>` : ""}
     </div>`;

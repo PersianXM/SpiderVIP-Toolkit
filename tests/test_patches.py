@@ -197,7 +197,7 @@ def test_runner_apply_then_verify_on_fake_box(tmp_path: Path):
     pending = json.loads((d / "pending.json").read_text(encoding="utf-8"))
     assert pending["stage"] == "applied" and pending["channel_tps_removed"] == 0
     assert pending["channels_removed"] == 0 and pending["favorite_entries_removed"] == 0
-    assert pending["motor_restored"] == ["1.0E Box1"]
+    assert pending["motor_restored"][0] == "1.0E Box1" and len(pending["motor_restored"]) == 158
     cand = pending["report"]["candidates"]
     assert cand["tps"] == [{"sat": "1.0E Box1", "freq": 12500, "pol": "H", "sr": 27500}]
     assert cand["channels"] == ["Gone Channel"]
@@ -208,7 +208,14 @@ def test_runner_apply_then_verify_on_fake_box(tmp_path: Path):
     assert (en / "lamedb").read_text(encoding="utf-8") == FA_LAMEDB
     assert (en / "userbouquet.1.tv").read_text(encoding="utf-8") == FA_FAV
     raw = liveprog.unpack((tmp_path / "live_prog").read_bytes())
-    assert liveprog.motor_map(raw) == {"1.0E Box1": (0x08, 0xFF)}     # cleared by "reload", restored
+    mm = liveprog.motor_map(raw)
+    assert mm["1.0E Box1"] == (0x08, 0xFF)                             # cleared by "reload", restored
+    # The 157 source satellites the box lacked were added, each with USALS (owner 2026-11-12).
+    sats_after = satxml.parse((en / "satellites.xml").read_bytes())
+    assert len(sats_after) == 160 and sats_after[3].name == "3.0E S3" and len(sats_after[3].tps) == 15
+    assert len(pending["summary"]["sats_added"]) == 157 and pending["summary"]["sats_removed"] == []
+    assert len(mm) == 158 and set(mm.values()) == {(0x08, 0xFF)}
+    assert pending["motor"] == {"1.0E Box1": [8, 255]}                 # original kept for a rollback check
     assert (d / "last_run").exists()
     snaps = list((tmp_path / "snaps").iterdir())
     assert len(snaps) == 1 and (snaps[0] / "enigma_db" / "lamedb").read_text(encoding="utf-8") == FA_LAMEDB

@@ -106,3 +106,30 @@ def motor_differences(raw: bytes, saved: Dict[str, Motor]) -> List[str]:
 
     now = motor_map(raw)
     return [n for n, m in saved.items() if now.get(n) != m]
+
+
+USALS: Motor = (0x08, 0xFF)
+
+
+def record_name(xml_name: str) -> str:
+    """``satellites.xml`` satellite name → the key :func:`motor_map` uses
+    (the 31-byte UTF-8 name read as latin-1, as stored in live_prog)."""
+
+    return xml_name.encode("utf-8")[:NAME_LEN - 1].decode("utf-8", "ignore").encode("utf-8").decode("latin-1")
+
+
+def target_motor(saved: Dict[str, Motor], *, added: List[str] = (), removed: List[str] = ()) -> Dict[str, Motor]:
+    """Motor settings to write after a reload that adds/removes satellites.
+
+    Removed satellites are dropped from ``saved``; every added satellite gets
+    USALS (owner decision 2026-11-12: "like the other satellites"), using the
+    most common USALS value already on the box, else :data:`USALS`.
+    """
+
+    drop = {record_name(n) for n in removed}
+    out = {n: m for n, m in saved.items() if n not in drop}
+    usals = [m for m in saved.values() if m[0] == 0x08]
+    ref = max(set(usals), key=usals.count) if usals else USALS
+    for n in added:
+        out[record_name(n)] = ref
+    return out

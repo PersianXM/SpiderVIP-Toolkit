@@ -399,6 +399,15 @@ class FrequencyDeployer:
             except Exception as exc:  # noqa: BLE001 — never block the update on this
                 self._log("motor", "warn", f"خواندن تنظیم Motor از live_prog ممکن نشد ({exc}); "
                                            "بعد از اعمال باید دستی برگردانده شود.")
+            # Satellites the new list adds get USALS; removed ones leave the map.
+            cur_names = {s.name for s in satxml.parse(current)}
+            new_names = {s.name for s in satxml.parse(new_xml)}
+            added, removed = sorted(new_names - cur_names), sorted(cur_names - new_names)
+            if added or removed:
+                motor_saved = liveprog.target_motor(motor_saved, added=added, removed=removed)
+                self._log("motor", "ok", f"{len(added)} ماهوارهٔ تازه USALS می‌گیرند؛ "
+                                         f"{len(removed)} ماهواره حذف می‌شود.")
+            result["sats_added"], result["sats_removed"] = added, removed
             result["motor"] = {"saved": sorted(motor_saved), "restored": [], "missing": [],
                                "verified": not motor_saved}
             st_before = channel_stats(rx)

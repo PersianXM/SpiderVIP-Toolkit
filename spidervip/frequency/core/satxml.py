@@ -116,6 +116,16 @@ def to_box_form(tp: Transponder) -> Transponder:
     return Transponder(attrs=a)
 
 
+BOX_NAME_BYTES = 31  # live_prog satellite names: 32-byte field, NUL-terminated (UTF-8)
+
+
+def box_sat_name(name: str) -> str:
+    """The satellite name as the box stores it: at most 31 UTF-8 bytes, never a cut character."""
+
+    raw = name.encode("utf-8")[:BOX_NAME_BYTES]
+    return raw.decode("utf-8", "ignore")
+
+
 def position_label(position: int) -> str:
     return f"{abs(position) / 10:.1f}{'W' if position < 0 else 'E'}"
 

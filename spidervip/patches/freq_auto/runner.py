@@ -5,9 +5,10 @@ Installed by the Console "Receiver patches" page to /data/spidervip_freq_auto/
 with ``freqcore/`` (a copy of spidervip/frequency/core) and driven by ``loop.sh``.
 
   runner.py report   build the plan, write last_report.json, change nothing
-  runner.py apply    phase 2: apply the whole plan (owner policy 2026-11-11:
-                     every change, every new TP, every TP missing from the
-                     source — except TPs that carry stored channels, which are
+  runner.py apply    phase 2: apply the whole plan (owner policy 2026-11-11/12:
+                     every change, every new TP, every new satellite (USALS),
+                     every receiver satellite missing from the source that no
+                     channel uses, every TP missing from the source — except TPs that carry stored channels, which are
                      only listed as "candidates" in the report: 4 live TPs
                      with Al Jazeera, 2M Maroc and Arryadia were scanned under
                      Badr 26.0E but belong to Es'hail 1 25.5E in the source),
@@ -128,10 +129,20 @@ def reboot():
 def reload_lists():
     errors = []
     for url in RELOAD_URLS:
-        if url == "fake://":  # tests: imitate the box (commit + Motor reset)
-            raw = bytearray(liveprog.unpack(read_bytes(LIVE_PROG)))
-            for _n, off in liveprog.satellite_records(bytes(raw)):
-                raw[off + liveprog.MOTOR_OFF] &= ~liveprog.MOTOR_MASK & 0xFF
+        if url == "fake://":  # tests: imitate the box (table rebuilt from the XML, Motor reset)
+            old = liveprog.unpack(read_bytes(LIVE_PROG))
+            recs = liveprog.satellite_records(old)
+            by_name = {n: old[o:o + liveprog.REC] for n, o in recs}
+            table = bytearray()
+            for sat in satxml.parse(read_bytes(SAT_XML)):
+                key = liveprog.record_name(sat.name)
+                rec = bytearray(by_name.get(key) or bytes(liveprog.REC))
+                if key not in by_name:
+                    rec[:liveprog.NAME_LEN - 1] = key.encode("latin-1").ljust(liveprog.NAME_LEN - 1, bytes(1))
+                    rec[liveprog.MOTOR_OFF], rec[liveprog.POSITIONER_OFF] = 0x51, 0xFF
+                rec[liveprog.MOTOR_OFF] &= ~liveprog.MOTOR_MASK & 0xFF
+                table += rec
+            raw = bytearray(table + old[len(recs) * liveprog.REC:])
             raw[-1] = (raw[-1] + 1) & 0xFF
             write_atomic(LIVE_PROG, liveprog.pack(bytes(raw)))
             return
@@ -219,7 +230,14 @@ def summarize(plan, info, warnings, mode):
         "box": {k: plan["box"].get(k) for k in ("sats", "tps", "channels", "channel_tps", "sha256")},
         "totals": t,
         "would_apply": {"changed": t["changed"], "new": t["new"], "removed": t["gone"],
-                        "protected": t["protected"]},
+                        "protected": t["protected"],
+                        "sats_new": t.get("sats_new", 0), "sats_new_tps": t.get("sats_new_tps", 0),
+                        "sats_removed": t.get("sats_removable", 0),
+                        "sats_removed_tps": t.get("sats_removable_tps", 0)},
+        "new_sats": [{"name": s["name"], "position": s["position_label"], "tps": s["count"]}
+                     for s in plan.get("new_sats", [])],
+        "removed_sats": [{"name": u["name"], "position": u["position_label"], "tps": u["box_count"]}
+                         for u in plan.get("unmatched", []) if u.get("removable")],
         "sats": sats,
         "unmatched": len(plan["unmatched"]),
     }
@@ -323,6 +341,9 @@ def apply():
                               "favorite_entries": fav_removed,
                               "names": channel_names(lam, cr["removed_services"])}
     motor = liveprog.motor_map(liveprog.unpack(read_bytes(LIVE_PROG)))
+    # New satellites get USALS, removed ones leave the map (owner decision 2026-11-12).
+    motor_target = liveprog.target_motor(motor, added=res["summary"]["sats_added"],
+                                         removed=res["summary"]["sats_removed"])
     ch_before = unique_channels(lam)
     ch_expected = unique_channels(new_lam)
 
@@ -344,7 +365,7 @@ def apply():
             time.sleep(1)
         wait_stable(LIVE_PROG)
         raw = liveprog.unpack(read_bytes(LIVE_PROG))
-        patched, restored, missing = liveprog.restore_motor(raw, motor)
+        patched, restored, missing = liveprog.restore_motor(raw, motor_target)
         if restored:
             write_atomic(LIVE_PROG, liveprog.pack(patched))
     except Exception as exc:  # noqa: BLE001 — nothing committed for sure: put the snapshot back
@@ -359,7 +380,9 @@ def apply():
     write_json(PENDING, {
         "stage": "applied", "time": now_iso(), "snapshot": snap,
         "expected_sha": res["sha256"], "channels_before": ch_before, "channels_expected": ch_expected,
-        "motor": {k: list(v) for k, v in motor.items()}, "motor_restored": restored, "motor_missing": missing,
+        "motor": {k: list(v) for k, v in motor.items()},
+        "motor_target": {k: list(v) for k, v in motor_target.items()},
+        "motor_restored": restored, "motor_missing": missing,
         "summary": res["summary"], "channel_tps_removed": len(targets),
         "channels_removed": ch_before - ch_expected, "favorite_entries_removed": fav_removed,
         "report": rep,
@@ -376,7 +399,9 @@ def verify():
     with open(PENDING, encoding="utf-8") as fh:
         pending = json.load(fh)
     rep = pending.get("report", {})
-    motor = {k: tuple(v) for k, v in pending.get("motor", {}).items()}
+    # After an apply the box must have the target Motor map; after a rollback, the original.
+    key = "motor_target" if pending["stage"] == "applied" and "motor_target" in pending else "motor"
+    motor = {k: tuple(v) for k, v in pending.get(key, {}).items()}
     actual = read_bytes(SAT_XML)
     problems = []
     if pending["stage"] == "applied":

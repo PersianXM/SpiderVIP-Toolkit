@@ -106,6 +106,53 @@ def test_diff_kinds_and_change_rules():
     assert set(rows[3].changes) == {"frequency", "symbol_rate"}
 
 
+def test_whole_satellites_added_and_empty_unmatched_removed():
+    """Owner policy 2026-11-12: add every source satellite the box lacks (box form,
+    31-byte name, appended), drop receiver satellites missing from the source only
+    when no stored channel uses them."""
+
+    def x(sats):
+        out = ['<?xml version="1.0"?>', "<satellites>"]
+        for name, pos, tps in sats:
+            out.append(f'  <sat name="{name}" flags="0" position="{pos}">')
+            out += [f'    <transponder frequency="{f}" symbol_rate="27500000" polarization="{p}" fec_inner="3" '
+                    f'system="1" modulation="2"/>' for f, p in tps]
+            out.append("  </sat>")
+        return ("\n".join(out + ["</satellites>"]) + "\n").encode()
+
+    box = x([("26.0E Badr", 260, [(11604000, "0")]), ("12.5W Empty", -125, [(11000000, "0")]),
+             ("43.1W Kept", -431, [(3800000, "0")])])
+    src = x([("26.0E Badr", 260, [(11604000, "0")]),
+             ("78.5E Ku-band Thaicom 6/8 and a very long name", 785, [(10970600, "2"), (10970000, "0"), (11000000, "1")])])
+    lam = ("eDVB services /4/\ntransponders\nfef10000:0001:0001\n\ts 3800000:27500000:0:3:3169:0:0:1:2\n/\n"
+           "end\nservices\n0001:fef10000:0001:0001:1:0\nKept TV\np:X\nend\n").encode()
+    p = plan.build(box, src, lamedb_data=lam)
+    assert [(n["name"], n["count"]) for n in p["new_sats"]] == [("78.5E Ku-band Thaicom 6/8 and a", 2)]
+    um = {u["name"]: u for u in p["unmatched"]}
+    assert um["12.5W Empty"]["removable"] and not um["43.1W Kept"]["removable"]   # channel at 43.1W
+    assert plan.default_selection(p) >= {"S1"} and "X1" not in plan.default_selection(p)
+    assert plan.full_selection(p) >= {"S1", "X1"} and "X2" not in plan.full_selection(p)
+    res = plan.apply(box, p, plan.full_selection(p))
+    out = satxml.parse(res["xml"])
+    assert [s.name for s in out] == ["26.0E Badr", "43.1W Kept", "78.5E Ku-band Thaicom 6/8 and a"]
+    assert [(t.freq_khz, t.pol) for t in out[2].tps] == [(10970000, "0"), (11000000, "1")]
+    assert out[2].attrs == {"name": "78.5E Ku-band Thaicom 6/8 and a", "flags": "0", "position": "785"}
+    assert res["summary"]["sats_added"] == ["78.5E Ku-band Thaicom 6/8 and a"]
+    assert res["summary"]["sats_removed"] == ["12.5W Empty"]
+    # Without lamedb nothing is removable (channels unknown).
+    assert not any(u["removable"] for u in plan.build(box, src)["unmatched"])
+
+
+def test_target_motor_gives_new_satellites_usals_and_drops_removed():
+    from spidervip.frequency.core import liveprog
+
+    saved = {"26.0E Badr": (0x08, 0xFF), "42.0E Ku-band TÃ¼rksat": (0x08, 0xFF), "119.3E Thaicom 4": (0x04, 0)}
+    t = liveprog.target_motor(saved, added=["78.5E Türksat-like ü name that is long"], removed=["119.3E Thaicom 4"])
+    assert "119.3E Thaicom 4" not in t and t["26.0E Badr"] == (0x08, 0xFF)
+    key = liveprog.record_name("78.5E Türksat-like ü name that is long")
+    assert t[key] == (0x08, 0xFF) and len(key.encode("latin-1")) <= 31
+
+
 def test_nearby_tps_finds_carrier_on_neighbouring_satellite_only():
     from spidervip.frequency.core import satxml
 
@@ -186,6 +233,7 @@ def test_apply_changes_only_selected_rows_and_keeps_sats():
     new = hot.tps[-1].attrs                                             # appended, box attr layout
     assert list(new) == list(satxml.BOX_TP_ATTR_ORDER) and new["frequency"] == "12500000"
     assert res["summary"] == {"changed": 1, "new": 1, "gone": 1, "sats_touched": 1,
+                              "sats_added": [], "sats_removed": [], "sat_tps_added": 0, "sat_tps_removed": 0,
                               "tps_before": 21, "tps_after": 21}
     # untouched satellites are byte-identical in the output text
     assert satxml.serialize([out[2]]) == satxml.serialize([before[2]])

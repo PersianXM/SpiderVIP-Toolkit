@@ -92,6 +92,7 @@ def _plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
                                        "counts", "guard")})
     return {"created": plan["created"], "source": plan["source"], "warnings": plan["warnings"],
             "box": plan["box"], "totals": plan["totals"], "sats": sats, "unmatched": plan["unmatched"],
+            "new_sats": [{k: v for k, v in s.items() if k != "tps"} for s in plan.get("new_sats", [])],
             "default_selected": sorted(plan_mod.default_selection(plan))}
 
 
