@@ -106,7 +106,11 @@
           ${p.available ? badge(st) : `<span class="pt-badge">به‌زودی</span>`} ${ver}
         </div>
         <p class="pt-summary">${esc(p.summary)}</p>
-        ${p.details && p.details.length ? `<ul class="pt-details">${p.details.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
+        ${p.details && p.details.length ? `<ul class="pt-details">${p.details.map((d) => {
+          const i = d.indexOf(": ");
+          return i > 0 && i < 20 ? `<li><b>${esc(d.slice(0, i))}:</b> ${esc(d.slice(i + 2))}</li>` : `<li>${esc(d)}</li>`;
+        }).join("")}</ul>` : ""}
+        ${p.tech && p.tech.length ? `<details class="pt-tech"><summary>جزئیات فنی</summary><ul>${p.tech.map((d) => `<li>${esc(d).replace(/(\/[\w.*\/-]+)/g, '<bdi dir="ltr">$1</bdi>')}</li>`).join("")}</ul></details>` : ""}
         ${st && st.running ? `<p class="pt-meta">شناسهٔ فرایند: <span class="ltr">${esc(st.running)}</span></p>` : ""}
         <div class="pt-actions">${actions}</div>
         ${steps ? `<ol class="pt-steps">${steps}</ol>` : ""}

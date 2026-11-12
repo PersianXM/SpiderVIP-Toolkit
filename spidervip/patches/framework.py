@@ -53,7 +53,8 @@ class Patch:
     available: bool = True
     note: str = ""
     extra_status: Optional[Callable[[Dict[str, str]], Dict[str, object]]] = None
-    details: List[str] = field(default_factory=list)
+    details: List[str] = field(default_factory=list)   # short, plain bullets shown on the card
+    tech: List[str] = field(default_factory=list)      # technical notes, collapsed under «جزئیات فنی»
     # Files written at install time with fresh content (config, clock floor…); not md5-tracked.
     generated: Optional[Callable[[], Dict[str, bytes]]] = None
     run_cmd: str = ""             # "run now", started in the background on the box
@@ -61,7 +62,7 @@ class Patch:
 
     def public(self) -> Dict[str, object]:
         return {"id": self.id, "title": self.title, "summary": self.summary, "available": self.available,
-                "note": self.note, "details": self.details, "box_dir": self.box_dir,
+                "note": self.note, "details": self.details, "tech": self.tech, "box_dir": self.box_dir,
                 "can_run": bool(self.run_cmd), "has_report": bool(self.report_file)}
 
 

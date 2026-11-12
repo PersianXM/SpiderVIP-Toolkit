@@ -45,7 +45,11 @@ body { font-family: var(--font-ui); font-size: var(--text-body); color: var(--co
 .pt-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .pt-card-head h2 { margin: 0; font-family: var(--font-display); font-size: var(--text-h3); flex: 1; min-width: 200px; }
 .pt-summary { line-height: 1.8; color: var(--color-ink-secondary); margin: var(--space-3) 0; }
-.pt-details { margin: 0 0 var(--space-3); padding-inline-start: var(--space-6); color: var(--color-ink-muted); font-size: 0.85rem; line-height: 1.9; }
+.pt-details { margin: 0 0 var(--space-3); padding-inline-start: var(--space-6); color: var(--color-ink-secondary); font-size: 0.9rem; line-height: 1.9; }
+.pt-details b { color: var(--color-ink); }
+.pt-tech { margin: 0 0 var(--space-3); color: var(--color-ink-muted); font-size: 0.8rem; }
+.pt-tech summary { cursor: pointer; }
+.pt-tech ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-6); line-height: 1.8; }
 .pt-note { margin: 0; padding: var(--space-3) var(--space-4); background: #fff6d6; border: var(--border-thin); border-radius: var(--radius-sm); line-height: 1.8; }
 .pt-badge, .pt-tag { display: inline-block; padding: 2px var(--space-3); border: var(--border-thin); border-radius: var(--radius-pill); font-size: var(--text-small); font-weight: 700; background: var(--color-surface); }
 .pt-ok { background: var(--color-lime); }
