@@ -15,6 +15,8 @@
 ## مستندات مرتبط (مشترک در `docs/`)
 
 - **[`AUDIO_FREEZE_2026-11.md`](AUDIO_FREEZE_2026-11.md)** — علت مستقیم (قفل درایور AO)، شواهد و نگهبان خودکار
+- **[`DISH_DRIVE_CRASH_2026-11.md`](DISH_DRIVE_CRASH_2026-11.md)** — قفل و ریبوت کل رسیور وقتی وسط چرخش دیش دوباره ماهواره عوض شود؛
+  آزمایش‌ها و وصلهٔ «نگهبان چرخش دیش»
 - [`AV_RECOVERY_RUNBOOK_2026-08-12.md`](AV_RECOVERY_RUNBOOK_2026-08-12.md) — بازیابی دستی با `reboot -f`
 - [`AV_RECOVERY_RUNBOOK-en.md`](AV_RECOVERY_RUNBOOK-en.md) — English summary
 - `AV_PIPELINE_MAP.md`

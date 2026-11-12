@@ -34,7 +34,11 @@ class Files:
 
 
 def test_registry_has_watchdog_and_frequency_patch():
-    assert [p.id for p in PATCHES] == ["audio_watch", "freq_auto"]
+    assert [p.id for p in PATCHES] == ["audio_watch", "dish_guard", "freq_auto"]
+    dg = BY_ID["dish_guard"]
+    assert dg.available and dg.box_dir == "/data/dish_guard" and dg.hook_tag == "dish_guard"
+    assert dg.hook_line == "python3 /data/dish_guard/dish_guard.py >/dev/null 2>&1 &  # dish_guard"
+    assert [f.remote for f in dg.files] == ["/data/dish_guard/dish_guard.py"]
     assert BY_ID["audio_watch"].available and BY_ID["freq_auto"].available
     fa = BY_ID["freq_auto"]
     remotes = [f.remote for f in fa.files]
@@ -355,10 +359,10 @@ def test_patches_webapp_and_console_mount(tmp_path: Path):
     app = create_app(session_factory=lambda h, u, p: (Rx("NOFILE - x\nHOOK 0\nRUN no\n"), Files()))
     c = app.test_client()
     assert c.get("/").status_code == 200
-    assert [p["id"] for p in c.get("/api/patches").get_json()["patches"]] == ["audio_watch", "freq_auto"]
+    assert [p["id"] for p in c.get("/api/patches").get_json()["patches"]] == ["audio_watch", "dish_guard", "freq_auto"]
     assert c.post("/api/status", json={}).status_code == 400
     st = c.post("/api/status", json={"host": "10.0.0.1"}).get_json()
-    assert st["ok"] and set(st["status"]) == {"audio_watch", "freq_auto"}
+    assert st["ok"] and set(st["status"]) == {"audio_watch", "dish_guard", "freq_auto"}
     assert c.post("/api/install", json={"host": "10.0.0.1", "id": "nope"}).status_code == 400
     run = c.post("/api/run", json={"host": "10.0.0.1", "id": "freq_auto"}).get_json()
     assert run["ok"]

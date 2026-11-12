@@ -95,5 +95,36 @@ FREQ_AUTO = Patch(
     ],
 )
 
-PATCHES: List[Patch] = [WATCHDOG, FREQ_AUTO]
+DG_DIR = "/data/dish_guard"
+
+DISH_GUARD = Patch(
+    id="dish_guard",
+    title="نگهبان چرخش دیش",
+    summary=("وقتی دیش موتوردار در حال چرخیدن به ماهوارهٔ دیگری است، دکمه‌های ریموت را چند ثانیه نگه می‌دارد تا رسیور قفل و "
+             "خودبه‌خود خاموش‌روشن نشود. بدون این وصله، اگر وسط چرخش دیش دوباره کانال ماهوارهٔ دیگری انتخاب شود، کل رسیور از کار می‌افتد."),
+    box_dir=DG_DIR,
+    files=[PatchFile(TOOLKIT_ROOT / "spidervip" / "patches" / "dish_guard" / "dish_guard.py",
+                     f"{DG_DIR}/dish_guard.py", "755")],
+    hook_tag="dish_guard",
+    hook_line=f"python3 {DG_DIR}/dish_guard.py >/dev/null 2>&1 &  # dish_guard",
+    start_cmd=f"python3 {DG_DIR}/dish_guard.py",
+    pid_file=f"{DG_DIR}/pid",
+    log_file=f"{DG_DIR}/log",
+    disable_flag=f"{DG_DIR}/disable",
+    details=[
+        "چه می‌بینید: بعد از رفتن به کانالی روی ماهوارهٔ دیگر، ریموت تا رسیدن دیش جواب نمی‌دهد (حدود ۱۰ تا ۲۵ ثانیه)",
+        "کانال‌های همان ماهواره: هیچ تغییری نمی‌کند؛ عوض کردن سریع کانال مثل قبل کار می‌کند",
+        "Favorite: می‌شود کانال دو ماهواره را در یک Favorite گذاشت، بدون قفل شدن رسیور",
+        "حذف: فقط فایل‌های همین وصله پاک می‌شوند؛ چیز دیگری روی رسیور تغییر نمی‌کند",
+    ],
+    tech=[
+        "فایل: /data/dish_guard/dish_guard.py — اجرا از /home/gx/local/user_script با هر روشن شدن",
+        "تشخیص: خط کرنل hi_dvb_set_source با tuner: -1 و هم‌زمان بالا رفتن درخواست‌های service gadget (حدود ۸۷ در ثانیه)",
+        "نگه داشتن: EVIOCGRAB روی /dev/input/event0 تا tuner: 0، پایان موج درخواست‌ها یا حداکثر ۴۵ ثانیه",
+        "گزارش: /data/dish_guard/log — هر چرخش یک خط (مدت و تعداد دکمه‌های نادیده‌گرفته)",
+        "علت و آزمایش‌ها: docs/freeze/DISH_DRIVE_CRASH_2026-11.md",
+    ],
+)
+
+PATCHES: List[Patch] = [WATCHDOG, DISH_GUARD, FREQ_AUTO]
 BY_ID: Dict[str, Patch] = {p.id: p for p in PATCHES}
