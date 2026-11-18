@@ -1,6 +1,6 @@
 # فریز صدا/تصویر — یافته‌های نوامبر ۲۰۲۶ و نگهبان خودکار
 
-**خلاصه (EN):** On 2026-11-02 and 2026-11-09 the "menu/zap OK, no A/V on any channel" freeze was captured live on the box. Both times the player thread was stuck in an ioctl on `/dev/hi_ao` (`AO_IOCTL_TrackGetDelayMs`), waiting on the AO driver's global lock `g_AoMutex`. Audio DMA (`aiao` IRQ) had stopped, the demux audio channel was 99% full, demux RAM port 128 was 97–98% full and `call HI_DVB_DMX_GetTSBuffer failed` repeated every 5 s. USB/`g_service` is a victim, not the cause. The AO driver `hi_aiao.ko` is byte-identical from v1.00.76 to v1.00.95, so no vendor update fixes it. Mitigation: an on-box watchdog (`tools/audio_watch.sh`) that reboots only when all three signs agree, installed with one click (`PATCH_RECEIVER.bat`).
+**خلاصه (EN):** On 2026-11-02 and 2026-11-09 the "menu/zap OK, no A/V on any channel" freeze was captured live on the box. Both times the player thread was stuck in an ioctl on `/dev/hi_ao` (`AO_IOCTL_TrackGetDelayMs`), waiting on the AO driver's global lock `g_AoMutex`. Audio DMA (`aiao` IRQ) had stopped, the demux audio channel was 99% full, demux RAM port 128 was 97–98% full and `call HI_DVB_DMX_GetTSBuffer failed` repeated every 5 s. USB/`g_service` is a victim, not the cause. The AO driver `hi_aiao.ko` is byte-identical from v1.00.76 to v1.00.95, so no vendor update fixes it. Mitigation: an on-box watchdog (`tools/audio_watch.sh`) that reboots only when all three signs agree (since 2026-11-18 also, for any source incl. IPTV, when audio DMA is stopped and `/proc/msp/avplay00` stays unreadable), installed with one click (`PATCH_RECEIVER.bat`).
 
 سندهای قدیمی مبتنی بر فرضیه «g_service بیکار / loopback داخلی / طوفان IRQ» حذف شده‌اند و در تاریخچه گیت باقی‌اند.
 
@@ -75,6 +75,14 @@
 منو، عوض‌کردن کانال و آماده‌به‌کار DMA صدا را هم می‌ایستانند، اما port را پر نمی‌کنند. برای همین باعث ریبوت نمی‌شوند.
 
 از نسخه 2026-11-11 یک مسیر دوم هم هست: با دیدن Oops کرنل (بیت 128 در `kernel.tainted`) بدون انتظار برای سه نشانه ریبوت می‌کند. جزئیات در بخش آخر، گزینه ۱.
+
+از 2026-11-18 مسیر سوم برای هر منبعی (ماهواره و IPTV) اضافه شد. نشانه‌های ۲ و ۳ فقط در کانال ماهواره‌ای پیدا می‌شوند، چون IPTV از port دمکس عبور نمی‌کند. فریز 2026-11-18 (تصویر و صدا ثابت، بدون ریبوت) احتمالاً همین کلاس حین IPTV بود. شرط مسیر سوم:
+- `aiao` حداقل ۶۰ ثانیه ثابت مانده باشد،
+- و `/proc/msp/avplay00` در ۲ بررسی پشت‌سرهم خوانده نشود: خطای `Resource temporarily unavailable`، یا خواندنی که بعد از ۲ ثانیه هنوز گیر است.
+
+شاهد: همهٔ خواندن‌های `avplay00` در فریزهای 11-02 و 11-09 همین‌طور شکست خوردند. در لاگ‌های `build/blackbox/` حدود ۳۹۰۰ خواندن سالم (PLAY، STOP و PAUSE، هم TS و هم ES/IPTV) هیچ‌وقت شکست نخوردند. یک بررسی زنده در 2026-11-18 هم ۴۰ خواندن از ۴۰ را موفق نشان داد. منو و عوض‌کردن کانال `avplay00` را خواندنی نگه می‌دارند. خطای دیگر (مثلاً نبودن فایل) حساب نمی‌شود.
+
+اینکه `avplay00` در گیر صدای حین IPTV هم همین‌طور قفل شود هنوز در یک فریز واقعی دیده نشده است. اگر یک بار رخ دهد، `event_*.txt` با خط `avplay00 ...` آن را نشان می‌دهد. `AW_AV_CHECKS=0` این مسیر را خاموش می‌کند.
 
 محافظ‌ها:
 - **بعد از بوت:** در ۶۰۰ ثانیه اول هیچ کاری نمی‌کند.

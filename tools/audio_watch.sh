@@ -11,6 +11,17 @@
 # Menus, channel changes and standby stop audio DMA but never fill the
 # port, so they do not trigger it.
 #
+# Signs 2 and 3 exist only for satellite (DVB) channels: IPTV does not go
+# through the demux port, so an AO freeze during IPTV never showed them
+# (2026-11-18: picture and sound froze, no reboot). A second trigger works
+# for any source: audio DMA stopped for STALL_SEC and /proc/msp/avplay00
+# could not be read on AV_CHECKS checks in a row (the read failed with
+# "Resource temporarily unavailable" or was still blocked after 2 s). Every
+# avplay00 read in the 2026-11-02 and 2026-11-09 freezes failed that way,
+# while about 3900 healthy reads (PLAY, STOP and PAUSE, DVB and IPTV) never
+# did. Menus and channel changes leave avplay00 readable, so they still do
+# not trigger it. AW_AV_CHECKS=0 turns this trigger off.
+#
 # Safety: no action in the first MIN_UPTIME seconds after boot. After
 # MAX_STREAK auto reboots in a row it only logs, so a box that freezes
 # right after every boot cannot loop forever. "In a row" means each boot
@@ -57,6 +68,8 @@ KMSG=${AW_KMSG:-/dev/kmsg}
 KMSG_KEEP=${AW_KMSG_KEEP:-3000}
 OOPS_REBOOT=${AW_OOPS_REBOOT:-1}
 OOPS_WAIT=${AW_OOPS_WAIT:-3}
+AV_CHECKS=${AW_AV_CHECKS:-2}
+AV_CAT=${AW_AV_CAT:-cat}
 
 # Keep running after the Telnet session that started it closes.
 trap '' HUP
@@ -112,6 +125,31 @@ port_used_pct() {
     sed -n 's/.*(\([0-9]*\)%).*/\1/p' "$D/port" 2>/dev/null | head -n 1
 }
 
+# Prints ok, eagain, blocked or other for one read of avplay00. A read that
+# is still blocked is never started again on top of itself: while $D/avbusy
+# exists the answer is blocked.
+avplay_state() {
+    if [ -e "$D/avbusy" ]; then
+        echo blocked
+        return
+    fi
+    rm -f "$D/av"
+    : > "$D/avbusy"
+    ( $AV_CAT "$PROC/msp/avplay00" > /dev/null 2> "$D/av.err"
+      echo "$?" > "$D/av"
+      rm -f "$D/avbusy" ) </dev/null >/dev/null 2>&1 &
+    sleep 2
+    if [ ! -e "$D/av" ]; then
+        echo blocked
+    elif [ "$(cat "$D/av")" = 0 ]; then
+        echo ok
+    elif grep -q 'temporarily unavailable' "$D/av.err" 2>/dev/null; then
+        echo eagain
+    else
+        echo other
+    fi
+}
+
 # Every kernel line except the gadget noise goes to $D/kmsg, written line
 # by line so nothing is lost when the box reboots. The last KMSG_KEEP lines
 # stay there and the ones before them in kmsg.old. /dev/kmsg gives each
@@ -146,6 +184,7 @@ save_evidence() {
         # A kernel fault sets the D bit (128) in tainted. A healthy player
         # has four playback threads; both freezes so far had three.
         echo "tainted $(cat "$PROC/sys/kernel/tainted" 2>/dev/null)"
+        echo "avplay00 $avs (unreadable $unread checks in a row)"
         P=$(pidof bianbiang 2>/dev/null)
         if [ -n "$P" ]; then
             echo "bianbiang=$P $(grep Threads "$PROC/$P/status" 2>/dev/null)"
@@ -190,9 +229,12 @@ if [ "$KMSG_KEEP" != 0 ] && [ -e "$KMSG" ]; then
 fi
 oops=$(oops_bit)
 [ "$oops" = 0 ] || log "kernel Oops already in tainted at start, not acting on it"
+rm -f "$D/avbusy"
 prev=""
 stalled=0
 held=0
+unread=0
+avs=-
 healthy_logged=0
 while :; do
     sleep "$INTERVAL"
@@ -227,23 +269,35 @@ while :; do
     else
         stalled=0
         held=0
+        unread=0
     fi
     prev=$ai
     [ "$stalled" -ge "$STALL_SEC" ] || continue
     [ "$held" = 0 ] || continue
     [ "$up" -ge "$MIN_UPTIME" ] || continue
-    $DMESG | grep -q 'GetTSBuffer failed' || continue
-    pct=$(port_used_pct)
-    [ "${pct:-0}" -ge "$PORT_FULL_PCT" ] || continue
+    why=""
+    if $DMESG | grep -q 'GetTSBuffer failed'; then
+        pct=$(port_used_pct)
+        [ "${pct:-0}" -ge "$PORT_FULL_PCT" ] && why="port=$pct%"
+    fi
+    if [ "$AV_CHECKS" != 0 ]; then
+        avs=$(avplay_state)
+        case "$avs" in
+            eagain|blocked) unread=$((unread + 1)) ;;
+            *) unread=0 ;;
+        esac
+        [ -z "$why" ] && [ "$unread" -ge "$AV_CHECKS" ] && why="avplay00=$avs x$unread"
+    fi
+    [ -n "$why" ] || continue
     if [ "$streak" -ge "$MAX_STREAK" ]; then
-        log "freeze confirmed (aiao=$ai port=$pct%) but $streak auto reboots in a row, not rebooting"
+        log "freeze confirmed (aiao=$ai $why) but $streak auto reboots in a row, not rebooting"
         held=1
         continue
     fi
     streak=$((streak + 1))
     echo "$streak" > "$D/streak"
     save_evidence
-    log "freeze confirmed (aiao=$ai stalled=${stalled}s port=$pct%), rebooting, streak=$streak"
+    log "freeze confirmed (aiao=$ai stalled=${stalled}s $why), rebooting, streak=$streak"
     $REBOOT
     exit 0
 done
