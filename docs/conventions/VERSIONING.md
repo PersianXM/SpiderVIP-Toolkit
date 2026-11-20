@@ -1,8 +1,3 @@
----
-description: SemVer for SpiderVIP Toolkit — bump and display app version on every user-facing change.
-alwaysApply: true
----
-
 # SpiderVIP versioning (SemVer)
 
 Single source of truth: `spidervip/_version.py` → `__version__`  

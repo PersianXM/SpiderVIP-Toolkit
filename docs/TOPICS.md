@@ -9,7 +9,7 @@
 
 | موضوع | کد / ابزار | مستندات ورودی | شاخهٔ کار فعلی (موقت) |
 |---|---|---|---|
-| فریز صوت/تصویر | `spidervip/freeze/`، `patches/`، ابزارهای freeze/gadget در `tools/` | [`docs/freeze/README.md`](freeze/README.md) | `cursor/freeze-forensic-capture` و مشابه؛ قفل هنگام چرخش دیش: [`DISH_DRIVE_CRASH_2026-11.md`](freeze/DISH_DRIVE_CRASH_2026-11.md) |
+| فریز صوت/تصویر | `spidervip/freeze/`، `patches/`، ابزارهای freeze/gadget در `tools/` | [`docs/freeze/README.md`](freeze/README.md) | قفل هنگام چرخش دیش: [`DISH_DRIVE_CRASH_2026-11.md`](freeze/DISH_DRIVE_CRASH_2026-11.md) |
 | کانال و Favorite | `spidervip/channels/` | [`docs/channels/README.md`](channels/README.md) | `feature/channel-favorite-manager` |
 | به‌روزرسانی فرکانس (Frequency update) | `spidervip/frequency/` | [`docs/frequency/README.md`](frequency/README.md) | نسخهٔ PC آماده (با برگرداندن خودکار Motor)؛ قدم بعد: اجرای خودکار روی رسیور |
 | وصلهٔ رسیور (Receiver patches) | `spidervip/patches/` | [`docs/patches/README.md`](patches/README.md) | نگهبان فریز، نگهبان چرخش دیش و فرکانس خودکار (اعمال هفتگی) هر سه روی رسیور نصب‌اند |

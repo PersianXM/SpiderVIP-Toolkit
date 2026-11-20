@@ -1,7 +1,6 @@
-# Cursor Implementation Prompt --- Operational Dashboard Visual System
+# UI Implementation Guide --- Operational Dashboard Visual System
 
-Use this prompt when asking Cursor to implement or refactor dashboard
-UI.
+Use this guide when implementing or refactoring dashboard UI.
 
 ## Role
 

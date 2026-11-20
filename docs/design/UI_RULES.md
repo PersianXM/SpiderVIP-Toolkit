@@ -1,13 +1,6 @@
----
-description: Persistent visual and UI implementation rules for SpiderVIP Console, Frequency, and Channels dashboards. Apply when creating, modifying, reviewing, or refactoring UI.
-globs:
-  - "spidervip/console/**/*"
-  - "spidervip/frequency/**/*"
-  - "spidervip/channels/static/**/*"
-alwaysApply: false
----
+# Dashboard Design System — UI rules
 
-# Dashboard Design System — Cursor Rule
+Applies to `spidervip/console/**`, `spidervip/frequency/**` and `spidervip/channels/static/**`.
 
 This project is a production operational dashboard.
 
