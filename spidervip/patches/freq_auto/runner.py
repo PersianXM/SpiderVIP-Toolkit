@@ -13,9 +13,18 @@ with ``freqcore/`` (a copy of spidervip/frequency/core) and driven by ``loop.sh`
                      with Al Jazeera, 2M Maroc and Arryadia were scanned under
                      Badr 26.0E but belong to Es'hail 1 25.5E in the source),
                      restore Motor, mark "pending verify", force-reboot
-  runner.py verify   after that boot: compare TPs / unique channels / Motor;
-                     on failure restore the snapshot once and force-reboot
+  runner.py verify   after that boot: compare TPs / unique channels / Motor /
+                     service types / favorite lists; on failure restore the
+                     snapshot once and force-reboot
+  runner.py repair-hd SNAP  one-time: put back HEVC HD services (type 31) and
+                     their favorite entries that an older run lost (2026-11-20)
   runner.py run      the mode in the ``mode`` file (default report)
+
+HEVC HD (2026-11-20): the box's lamedb import, run by every servicelistreload,
+does not know service type 31; it turns those services into radio entries with
+channel number 0, so they vanish from the TV favorites. Before the reload the
+type is written as 25 (lamedb.STANDIN_TYPES) and afterwards put back in
+live_prog (liveprog.restore_service_types); unknown types block the apply.
 
 Environment overrides exist only for tests (FA_*).
 """
@@ -144,6 +153,7 @@ def reload_lists():
                 table += rec
             raw = bytearray(table + old[len(recs) * liveprog.REC:])
             raw[-1] = (raw[-1] + 1) & 0xFF
+            _fake_import_services(raw)
             write_atomic(LIVE_PROG, liveprog.pack(bytes(raw)))
             return
         try:
@@ -155,6 +165,156 @@ def reload_lists():
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{url}: {exc}")
     raise RuntimeError("servicelistreload failed: " + "; ".join(errors))
+
+
+def _fake_import_services(raw):
+    """Tests: imitate the box's lamedb import into the service table (types it
+    does not know become radio entries with channel number 0)."""
+
+    lines = read_bytes(LAMEDB).decode("utf-8", "replace").splitlines()
+    by_sid = {}
+    for i in lamedb_mod._services(lines):  # noqa: SLF001 — test helper
+        p = lines[i].split(":")
+        if len(p) >= 6 and i + 1 < len(lines):
+            by_sid[(int(p[0], 16), lines[i + 1].encode("utf-8"))] = (int(p[4]), int(p[5]))
+    for s in liveprog.services(bytes(raw)):
+        got = by_sid.get((s["sid"], s["name"]))
+        if got is None:
+            continue
+        t, num = got
+        off = s["off"]
+        known = t in lamedb_mod.IMPORTER_TYPES
+        raw[off + liveprog.SVC_TYPE] = t & 0xFF
+        if not known or t == 2:
+            raw[off + liveprog.SVC_FLAGS] |= liveprog.SVC_RADIO
+        else:
+            raw[off + liveprog.SVC_FLAGS] &= ~liveprog.SVC_RADIO & 0xFF
+        num = num if known else 0
+        raw[off + liveprog.SVC_NUM:off + liveprog.SVC_NUM + 2] = num.to_bytes(2, "little")
+    # The box exports lamedb and the favorites at the reload (not at boot).
+    svcs = {s["sid"]: s for s in liveprog.services(bytes(raw))}
+    if not svcs:
+        return
+    out = []
+    for ln in read_bytes(LAMEDB).decode("utf-8").splitlines(keepends=True):
+        p = ln.rstrip("\n").split(":")
+        if len(p) >= 6 and len(p[0]) == 4 and int(p[0], 16) in svcs:
+            s = svcs[int(p[0], 16)]
+            p[4], p[5] = ("0", "0") if s["radio"] and s["type"] != 2 else (str(s["type"]), str(s["number"]))
+            ln = ":".join(p) + "\n"
+        out.append(ln)
+    write_atomic(LAMEDB, "".join(out).encode("utf-8"))
+    for path in bouquet_files():
+        out = []
+        for ln in read_bytes(path).decode("utf-8").splitlines(keepends=True):
+            if ln.startswith("#SERVICE "):
+                r = ln.strip()[len("#SERVICE "):].split(":")
+                s = svcs.get(int(r[3], 16)) if len(r) > 6 else None
+                if s is not None:
+                    if s["radio"] and path.endswith(".tv"):
+                        continue
+                    r[2] = f"{s['type']:X}"
+                    ln = "#SERVICE " + ":".join(r) + "\n"
+            out.append(ln)
+        write_atomic(path, "".join(out).encode("utf-8"))
+
+
+def rewrite_exports(keys):
+    """Write the real type back into the box's own export (lamedb, userbouquets)
+    for the stand-in services. The box does not re-export at boot (live
+    2026-11-20: files kept their pre-reboot time), so without this the files
+    keep showing type 25 / ``19`` although live_prog has 31 again."""
+
+    if not keys:
+        return
+    inv = {v: k for k, v in lamedb_mod.STANDIN_TYPES.items()}
+    wait_stable(LAMEDB, timeout=30.0, stable_for=4.0)
+    text = read_bytes(LAMEDB).decode("utf-8", "replace")
+    new, changed = lamedb_mod.substitute_types(text, standin=inv, only=keys)
+    if changed:
+        write_atomic(LAMEDB, new.encode("utf-8"))
+    for path in bouquet_files():
+        text = read_bytes(path).decode("utf-8", "replace")
+        new, n = lamedb_mod.substitute_bouquet_types(text, keys, standin=inv)
+        if n:
+            write_atomic(path, new.encode("utf-8"))
+    sync()
+
+
+def hd_services(raw):
+    """``[[sid, name hex, type]]`` of TV services whose type needs the stand-in (for verify)."""
+
+    return [[s["sid"], s["name"].hex(), s["type"]] for s in liveprog.services(raw)
+            if s["type"] in lamedb_mod.STANDIN_TYPES and not s["radio"]]
+
+
+def reload_and_restore(motor_target, force=(), keys=()):
+    """servicelistreload, wait until live_prog settles, then put back what the
+    import loses: service types it does not know (see lamedb.STANDIN_TYPES)
+    and Motor settings. Raises if the services did not come back as expected."""
+
+    before = read_bytes(LIVE_PROG)
+    before_raw = liveprog.unpack(before)
+    reload_lists()
+    for _ in range(15):
+        if read_bytes(LIVE_PROG) != before:
+            break
+        time.sleep(1)
+    wait_stable(LIVE_PROG)
+    raw0 = liveprog.unpack(read_bytes(LIVE_PROG))
+    raw, types_restored, problems = liveprog.restore_service_types(
+        before_raw, raw0, lamedb_mod.STANDIN_TYPES, force=force)
+    if problems:
+        raise RuntimeError("services after reload: " + "; ".join(problems[:8]))
+    patched, restored, missing = liveprog.restore_motor(raw, motor_target)
+    if patched != raw0:
+        write_atomic(LIVE_PROG, liveprog.pack(patched))
+    rewrite_exports(keys)
+    return restored, missing, types_restored, hd_services(patched)
+
+
+def hd_guard(lam, new_lam, bouquets):
+    """Prepare lamedb/bouquets for the reload and what verify must find afterwards.
+
+    Services of a type the importer cannot keep get the stand-in type (also in
+    their favorite references); verify then requires every service type and
+    every favorite list to come back exactly as intended.
+    """
+
+    text = new_lam.decode("utf-8", "replace")
+    # FA_TEST_NO_STANDIN: tests only — reload without the stand-in, like before 2026-11-20.
+    sub_text, keys = lamedb_mod.substitute_types(text, {} if os.environ.get("FA_TEST_NO_STANDIN") else None)
+    out, exp_refs, before_refs = {}, {}, {}
+    for path in bouquet_files():
+        orig = read_bytes(path)
+        intended = bouquets.get(path, orig).decode("utf-8", "replace")
+        name = os.path.basename(path)
+        before_refs[name] = lamedb_mod.bouquet_refs(orig.decode("utf-8", "replace"))
+        exp_refs[name] = lamedb_mod.bouquet_refs(intended)
+        sub, n = lamedb_mod.substitute_bouquet_types(intended, keys)
+        if path in bouquets or n:
+            out[path] = sub.encode("utf-8")
+    return {"lamedb": sub_text.encode("utf-8"), "keys": keys, "bouquets": out,
+            "expect": {"types_expected": lamedb_mod.service_types(text),
+                       "types_before": lamedb_mod.service_types(lam.decode("utf-8", "replace")),
+                       "bouquets_expected": exp_refs, "bouquets_before": before_refs}}
+
+
+def list_problems(types_want, bouquets_want):
+    """Service types and favorite lists that differ from what was intended."""
+
+    problems = []
+    if types_want:
+        now = lamedb_mod.service_types(read_bytes(LAMEDB).decode("utf-8", "replace"))
+        bad = sorted(k for k, t in types_want.items() if k in now and now[k] != t)
+        if bad:
+            problems.append(f"service type changed on {len(bad)} channels ({', '.join(bad[:5])})")
+    for name, refs in (bouquets_want or {}).items():
+        path = os.path.join(ENIGMA, name)
+        now = lamedb_mod.bouquet_refs(read_bytes(path).decode("utf-8", "replace")) if os.path.exists(path) else []
+        if now != refs:
+            problems.append(f"favorites changed: {name} ({len(refs)} -> {len(now)} entries)")
+    return problems
 
 
 def wait_stable(path, timeout=60.0, stable_for=6.0, step=1.0):
@@ -333,10 +493,19 @@ def apply():
         write_json(REPORT, rep)
         log("apply: nothing to change")
         return 0
+    unknown = lamedb_mod.unknown_types(lam.decode("utf-8", "replace"))
+    if unknown:
+        # The reload would turn these services into radio entries and drop them from favorites.
+        rep.update(ok=False, result="blocked_service_types", unknown_types=unknown,
+                   seconds=round(time.time() - t0, 1))
+        write_json(REPORT, rep)
+        log(f"apply blocked: service types the receiver's import cannot keep: {unknown}")
+        return 0
     res = plan_mod.apply(box, plan, sel)
     cr = channel_removal(plan, sel, lam)
     targets, new_lam, removed_keys = cr["targets"], cr["new_lam"], cr["removed_keys"]
     bouquets, fav_removed = cr["bouquets"], cr["fav_removed"]
+    guard = hd_guard(lam, new_lam, bouquets)
     rep["channel_removal"] = {"tps": len(targets), "channels": cr["channels_removed"],
                               "favorite_entries": fav_removed,
                               "names": channel_names(lam, cr["removed_services"])}
@@ -352,22 +521,12 @@ def apply():
         f"channels removed {ch_before - ch_expected}, favorite entries removed {fav_removed}")
     try:
         write_atomic(SAT_XML, res["xml"])
-        if removed_keys:
-            write_atomic(LAMEDB, new_lam)
-        for path, data in bouquets.items():
+        if removed_keys or guard["keys"]:
+            write_atomic(LAMEDB, guard["lamedb"])
+        for path, data in guard["bouquets"].items():
             write_atomic(path, data)
         sync()
-        before = read_bytes(LIVE_PROG)
-        reload_lists()
-        for _ in range(15):
-            if read_bytes(LIVE_PROG) != before:
-                break
-            time.sleep(1)
-        wait_stable(LIVE_PROG)
-        raw = liveprog.unpack(read_bytes(LIVE_PROG))
-        patched, restored, missing = liveprog.restore_motor(raw, motor_target)
-        if restored:
-            write_atomic(LIVE_PROG, liveprog.pack(patched))
+        restored, missing, types_restored, hd = reload_and_restore(motor_target, keys=guard["keys"])
     except Exception as exc:  # noqa: BLE001 — nothing committed for sure: put the snapshot back
         restore_snapshot(snap)
         rep.update(ok=False, result="error_restored", error=f"{type(exc).__name__}: {exc}", snapshot=snap,
@@ -385,10 +544,134 @@ def apply():
         "motor_restored": restored, "motor_missing": missing,
         "summary": res["summary"], "channel_tps_removed": len(targets),
         "channels_removed": ch_before - ch_expected, "favorite_entries_removed": fav_removed,
+        "types_restored": types_restored, "hd_services": hd,
+        **guard["expect"],
         "report": rep,
     })
     prune(keep_also=snap)
     log("apply: done, force-rebooting for verification")
+    reboot()
+    return 0
+
+
+def _service_entries(text):
+    """``{key: (type, number, name)}`` from lamedb text (first entry wins)."""
+
+    lines = text.splitlines()
+    out = {}
+    for i in lamedb_mod._services(lines):  # noqa: SLF001
+        p = lines[i].split(":")
+        if len(p) >= 6 and i + 1 < len(lines):
+            key = ":".join(p[:4]).lower()
+            if key not in out:
+                try:
+                    out[key] = (int(p[4]), int(p[5]), lines[i + 1])
+                except ValueError:
+                    pass
+    return out
+
+
+def repair_hd(snap):
+    """One-time repair after an older run (before 2026-11-20) mangled HEVC HD
+    services: put their type/number and their favorite entries back from
+    ``snap`` (a snapshot taken before that run), through the same reload +
+    live_prog restore + verify path as an apply. The TP list is not touched."""
+
+    if os.path.exists(PENDING):
+        log("repair skipped: a previous apply is still waiting for verification")
+        return 3
+    snap_lam = read_bytes(os.path.join(snap, "enigma_db", "lamedb")).decode("utf-8", "replace")
+    lam = read_bytes(LAMEDB)
+    cur = _service_entries(lam.decode("utf-8", "replace"))
+    old = _service_entries(snap_lam)
+    fix = {k: (t, n) for k, (t, n, _name) in old.items()
+           if t in lamedb_mod.STANDIN_TYPES and k in cur and cur[k][0] != t}
+    if not fix:
+        log("repair: nothing to repair")
+        return 0
+    names = [old[k][2] for k in fix]
+    force = {(int(k.split(":")[0], 16), old[k][2].encode("utf-8")) for k in fix}
+    new_lam_text, _keys = lamedb_mod.substitute_types(lam.decode("utf-8", "replace"), numbers=fix)
+    real_lam_text, _ = lamedb_mod.substitute_types(lam.decode("utf-8", "replace"), standin={},
+                                                   numbers=fix)
+    # Favorite lists: take the snapshot's version only where the difference is
+    # exactly the entries of the repaired services.
+    fixed_refs = set()
+    for k in fix:
+        sid, ns, tsid, onid = (int(x, 16) for x in k.split(":"))
+        fixed_refs.add((sid, ns, tsid, onid))
+
+    def ref_key(line):
+        r = line[len("#SERVICE "):].split(":")
+        try:
+            return (int(r[3], 16), int(r[6], 16), int(r[4], 16), int(r[5], 16))
+        except (IndexError, ValueError):
+            return None
+
+    bouquets, intended, skipped = {}, {}, []
+    for path in bouquet_files():
+        name = os.path.basename(path)
+        snap_path = os.path.join(snap, "enigma_db", name)
+        now_text = read_bytes(path).decode("utf-8", "replace")
+        if not os.path.exists(snap_path):
+            continue
+        snap_text = read_bytes(snap_path).decode("utf-8", "replace")
+        now_refs, snap_refs = lamedb_mod.bouquet_refs(now_text), lamedb_mod.bouquet_refs(snap_text)
+        if now_refs == snap_refs:
+            continue
+        if [r for r in snap_refs if ref_key(r) not in fixed_refs] != now_refs:
+            skipped.append(name)
+            continue
+        bouquets[path] = lamedb_mod.substitute_bouquet_types(snap_text, fix.keys())[0].encode("utf-8")
+        intended[name] = snap_refs
+        if os.path.exists(snap_path + ".simple"):  # index form; record indexes do not move
+            bouquets[path + ".simple"] = read_bytes(snap_path + ".simple")
+    # What verify must find, taken before anything is written.
+    sat_before = read_bytes(SAT_XML)
+    want_bouquets = {os.path.basename(p): lamedb_mod.bouquet_refs(read_bytes(p).decode("utf-8", "replace"))
+                     for p in bouquet_files()}
+    want_bouquets.update(intended)  # the box must show the real type, not the stand-in we write
+    motor = liveprog.motor_map(liveprog.unpack(read_bytes(LIVE_PROG)))
+    ch_before = unique_channels(lam)
+    snap_now = snapshot()
+    log(f"repair: snapshot {snap_now}; {len(fix)} services ({', '.join(names)}); favorites from {snap}: "
+        f"{sorted(intended)}; skipped {skipped}")
+    rep = {"ok": True, "mode": "repair-hd", "time": now_iso(), "repaired": names,
+           "favorites": sorted(intended), "skipped": skipped}
+    try:
+        write_atomic(LAMEDB, new_lam_text.encode("utf-8"))
+        for path, data in bouquets.items():
+            write_atomic(path, data)
+        sync()
+        restored, missing, types_restored, hd = reload_and_restore(motor, force=force, keys=list(fix))
+        lost = [s["name"].decode("utf-8", "replace") for s in liveprog.services(liveprog.unpack(read_bytes(LIVE_PROG)))
+                if (s["sid"], s["name"]) in force and (s["radio"] or not s["number"])]
+        if lost or len(types_restored) < len(fix):
+            raise RuntimeError(f"repaired services not back as TV: {lost or types_restored}")
+    except Exception as exc:  # noqa: BLE001
+        restore_snapshot(snap_now)
+        rep.update(ok=False, result="error_restored", error=f"{type(exc).__name__}: {exc}", snapshot=snap_now)
+        write_json(REPORT, rep)
+        log(f"repair FAILED, snapshot restored, rebooting: {exc}")
+        reboot()
+        return 2
+    write_atomic(EXPECTED, sat_before)
+    types_before = lamedb_mod.service_types(lam.decode("utf-8", "replace"))
+    write_json(PENDING, {
+        "stage": "applied", "time": now_iso(), "snapshot": snap_now,
+        "channels_before": ch_before, "channels_expected": ch_before,
+        "motor": {k: list(v) for k, v in motor.items()},
+        "motor_target": {k: list(v) for k, v in motor.items()},
+        "motor_restored": restored, "motor_missing": missing,
+        "summary": {"repair_hd": names}, "channel_tps_removed": 0, "channels_removed": 0,
+        "favorite_entries_removed": 0, "types_restored": types_restored, "hd_services": hd,
+        "types_expected": lamedb_mod.service_types(real_lam_text), "types_before": types_before,
+        "bouquets_expected": want_bouquets,
+        "bouquets_before": {os.path.basename(p): lamedb_mod.bouquet_refs(read_bytes(os.path.join(snap_now, "enigma_db", os.path.basename(p))).decode("utf-8", "replace")) for p in bouquet_files()},
+        "report": rep,
+    })
+    # No prune here: the snapshot the repair came from must survive.
+    log("repair: done, force-rebooting for verification")
     reboot()
     return 0
 
@@ -423,6 +706,22 @@ def verify():
         diff = [f"live_prog unreadable: {exc}"]
     if diff:
         problems.append("Motor not restored: " + ", ".join(diff))
+    # Service types and favorites (added 2026-11-20; older pending files have neither).
+    if pending["stage"] == "applied":
+        problems += list_problems(pending.get("types_expected"), pending.get("bouquets_expected"))
+        if pending.get("hd_services"):  # the box's own DB, not only its export
+            try:
+                now = {(s["sid"], s["name"].hex()): s for s in liveprog.services(liveprog.unpack(read_bytes(LIVE_PROG)))}
+            except Exception as exc:  # noqa: BLE001
+                now = {}
+                problems.append(f"live_prog unreadable: {exc}")
+            lost = [bytes.fromhex(h).decode("utf-8", "replace") for sid, h, t in pending["hd_services"]
+                    if not (now.get((sid, h)) and now[(sid, h)]["type"] == t and not now[(sid, h)]["radio"]
+                            and now[(sid, h)]["number"])]
+            if lost:
+                problems.append(f"HD services not TV in live_prog: {', '.join(lost[:6])}")
+    else:
+        problems += list_problems(pending.get("types_before"), pending.get("bouquets_before"))
 
     if pending["stage"] == "applied" and problems:
         log("verify FAILED, rolling back: " + "; ".join(problems))
@@ -463,6 +762,11 @@ def main(argv):
         os.rmdir(LOCK)
         os.mkdir(LOCK)
     try:
+        if mode == "repair-hd":
+            if len(argv) < 3 or not os.path.isdir(os.path.join(argv[2], "enigma_db")):
+                log("repair-hd needs a snapshot folder")
+                return 2
+            return repair_hd(argv[2])
         return apply() if mode == "apply" else report_only()
     except Exception as exc:  # noqa: BLE001 — keep the last good report, record the failure
         write_json(os.path.join(D, "last_error.json"),

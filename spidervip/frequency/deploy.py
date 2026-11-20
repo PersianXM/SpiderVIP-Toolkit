@@ -302,8 +302,17 @@ class FrequencyDeployer:
                timeout=60.0)
 
     def _restore_export(self, rx, snap: str) -> None:
-        rx.run(f"cp -f {_q(SNAP_ROOT + '/' + snap + '/enigma_db/satellites.xml')} {_q(SAT_XML)} && sync",
-               timeout=30.0)
+        # The whole export: satellites.xml, and lamedb/userbouquets the HD guard may have written.
+        rx.run(f"cp -rf {_q(SNAP_ROOT + '/' + snap + '/enigma_db')}/. {_q(ENIGMA_DB)}/ && sync", timeout=60.0)
+
+    def _hard_restore(self, rx, snap: str):
+        """Whole live_prog + enigma_db from the snapshot, then a forced reboot (proven path)."""
+
+        d = f"{SNAP_ROOT}/{snap}"
+        self._log("restore", "running", "بازگرداندن کامل live_prog و enigma_db از snapshot و راه‌اندازی اجباری…")
+        rx.run(f"cp -f {_q(d + '/live_prog')} {_q(LIVE_PROG)} && cp -rf {_q(d + '/enigma_db')}/. {_q(ENIGMA_DB)}/ "
+               "&& sync", timeout=120.0)
+        return self._reboot_and_wait(rx, force=True)
 
     def _restore_motor(self, rx, files: "BoxFiles", saved: Dict[str, "liveprog.Motor"],
                        result: Dict[str, object]) -> bool:
@@ -390,6 +399,17 @@ class FrequencyDeployer:
             if hashlib.sha256(lamedb_now).hexdigest() != expected_lamedb_sha:
                 raise DeployError("کانال‌های رسیور (lamedb) از زمان «بررسی» عوض شده‌اند؛ دوباره «بررسی تغییرات» را بزنید.")
             result["motor_check_sats"] = motor_check_sats(new_xml, lamedb_now)
+            # HEVC HD (type 31): the reload's importer would turn them into radio entries.
+            from .hd_guard import HdGuard, HdGuardError
+
+            guard = HdGuard(rx, sleep=self.sleep)
+            try:
+                hd_keys = guard.check()
+            except HdGuardError as exc:
+                raise DeployError(str(exc)) from exc
+            result["hd"] = {"services": len(hd_keys), "restored": [], "verified": not hd_keys}
+            if hd_keys:
+                self._log("hd", "ok", f"{len(hd_keys)} کانال HEVC HD (نوع 31) هنگام ثبت محافظت می‌شوند.")
             # Motor/USALS lives only in live_prog and every reload clears it; keep a copy.
             motor_saved: Dict[str, liveprog.Motor] = {}
             try:
@@ -427,6 +447,7 @@ class FrequencyDeployer:
 
             self._log("upload", "running", "ارسال satellites.xml جدید…")
             try:
+                guard.write_standin()
                 files.write(SAT_XML, new_xml, progress=lambda n, t: self._log(
                     "upload", "running", f"ارسال: {n}/{t} بسته"))
             except Exception:
@@ -437,13 +458,26 @@ class FrequencyDeployer:
             self._log("commit", "running", "درخواست ثبت لیست جدید در رسیور (servicelistreload)…")
             self._commit(rx, snap)
 
+            try:
+                restored_hd = guard.restore(lambda: self._wait_export_settled(rx, timeout=60.0, stable_for=6.0))
+            except Exception as exc:  # noqa: BLE001 — HD services lost: the proven whole-file rollback
+                self._log("hd", "fail", f"{exc} — برگشت کامل به snapshot {snap}.")
+                rx = self._hard_restore(rx, snap)
+                raise DeployError(f"کانال‌های HD پس از ثبت لیست از دست می‌رفتند؛ رسیور به snapshot {snap} برگشت.") from exc
+            result["hd"]["restored"] = restored_hd
+            if restored_hd:
+                self._log("hd", "ok", f"نوع HEVC HD {len(restored_hd)} کانال در live_prog برگردانده شد.")
+
             motor_patched = False
             if motor_saved:
                 motor_patched = self._restore_motor(rx, files, motor_saved, result)
+            forced = bool(motor_saved or guard.needs_forced_reboot)
+            if forced:
                 # A patched live_prog only survives a forced reboot (a normal shutdown
                 # lets the app save its in-memory copy, with Motor Off, over it).
                 rx = self._reboot_and_wait(rx, force=True)
                 files = BoxFiles(rx)
+                guard.rx = rx
                 if motor_patched:
                     diff = liveprog.motor_differences(liveprog.unpack(files.read(LIVE_PROG)), motor_saved)
                     result["motor"]["verified"] = not diff
@@ -453,15 +487,16 @@ class FrequencyDeployer:
                     else:
                         self._log("motor", "ok", f"Motor همهٔ {len(motor_saved)} ماهواره پس از راه‌اندازی تأیید شد.")
 
-            if not reboot_verify and not motor_saved:
+            if not reboot_verify and not forced:
                 self._prune(rx)
                 result["ok"] = True
                 self._log("done", "warn", "اعمال شد، ولی بدون راه‌اندازی دوباره تأیید نهایی انجام نشد.")
                 return result
 
-            if not motor_saved:
+            if not forced:
                 rx = self._reboot_and_wait(rx)
                 files = BoxFiles(rx)
+                guard.rx = rx
             self._log("verify", "running", "خواندن لیست واقعی رسیور پس از راه‌اندازی و مقایسه…")
             actual = files.read(SAT_XML)
             cmp = compare_lists(new_xml, actual)
@@ -499,11 +534,19 @@ class FrequencyDeployer:
                 if result["ok"]:
                     result["ok"] = False
                     result["error"] = "Motor خودکار برنگشت؛ دستی برگردانید."
-            for f in favs:
-                if f["changed"]:
-                    self._log("favorites", "warn",
-                              f"Favorite «{f['file']}» تغییر کرد ({f['before']} → {f['after']} کانال): "
-                              + " | ".join(f["lines"][:6]))
+            lost_hd = guard.verify()
+            result["hd"]["verified"] = not lost_hd
+            if lost_hd:
+                self._log("hd", "fail", "این کانال‌های HD دیگر TV نیستند (از Favoriteها می‌افتند): "
+                                        + "، ".join(lost_hd[:8]) + f". از snapshot {snap} برگردید.")
+            changed_favs = [f for f in favs if f["changed"]]
+            for f in changed_favs:
+                self._log("favorites", "fail",
+                          f"Favorite «{f['file']}» تغییر کرد ({f['before']} → {f['after']} کانال): "
+                          + " | ".join(f["lines"][:6]) + f". از snapshot {snap} برگردید.")
+            if (lost_hd or changed_favs) and result["ok"]:
+                result["ok"] = False
+                result["error"] = "Favoriteها یا کانال‌های HD تغییر کردند؛ با snapshot برگردید."
             return result
         except DeployError as exc:
             self._log("error", "fail", str(exc))

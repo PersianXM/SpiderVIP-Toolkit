@@ -409,8 +409,21 @@ class FakeBox:
         if "SNAP_OK" in cmd:
             d = re.search(r"mkdir -p '([^']+)'", cmd).group(1)
             self.files[d + "/live_prog"] = self.files["/data/gx/live_prog"]
-            self.files[d + "/enigma_db/satellites.xml"] = self.files["/data/gx/local/enigma_db/satellites.xml"]
+            for k in [k for k in self.files if k.startswith("/data/gx/local/enigma_db/")]:
+                self.files[d + "/enigma_db/" + k.rsplit("/", 1)[1]] = self.files[k]
             return "SNAP_OK"
+        m = re.match(r"cp -f '([^']+)/live_prog' '/data/gx/live_prog' && ", cmd)
+        if m:
+            self.files["/data/gx/live_prog"] = self.files[m.group(1) + "/live_prog"]
+        m = re.search(r"cp -rf '([^']+)/enigma_db'/\. '/data/gx/local/enigma_db'/", cmd)
+        if m:
+            pre = m.group(1) + "/enigma_db/"
+            for k in [k for k in self.files if k.startswith(pre)]:
+                self.files["/data/gx/local/enigma_db/" + k[len(pre):]] = self.files[k]
+            return ""
+        if cmd.startswith("ls -1 ") and "userbouquet" in cmd:
+            return "\n".join(sorted(k for k in self.files if k.startswith("/data/gx/local/enigma_db/userbouquet.")
+                                    and k.endswith((".tv", ".radio"))))
         if "LP_CHANGED" in cmd:
             d = re.search(r"cmp -s '/data/gx/live_prog' '([^']+)'", cmd).group(1)
             return "LP_SAME" if self.files["/data/gx/live_prog"] == self.files[d] else "LP_CHANGED"

@@ -240,3 +240,124 @@ def filter_bouquet(text: str, services) -> Tuple[str, int]:
                 continue
         out.append(raw)
     return "".join(out), removed
+
+
+# ---------------------------------------------------------------- service types
+# The box's lamedb importer (run by every servicelistreload) keeps these
+# service types as TV/radio; anything else is turned into a radio entry with
+# channel number 0 (live box 2026-11-20: all 14 type-31 HEVC HD services, and
+# with them 10 entries of favorite list "IRAN HD"). Types are lamedb decimals.
+IMPORTER_TYPES = frozenset({0, 1, 2, 17, 22, 25})
+# Type written into lamedb/bouquets just for the reload, then put back in
+# live_prog by liveprog.restore_service_types (31 = HEVC HD -> 25 = H.264 HD).
+STANDIN_TYPES = {31: 25}
+
+
+def _services(lines):
+    try:
+        i = lines.index("services") + 1
+    except ValueError:
+        return
+    while i < len(lines) and lines[i] != "end":
+        yield i
+        i += 3
+
+
+def service_types(text: str) -> dict:
+    """``{"sid:ns:tsid:onid": type}`` (lower-case hex key, decimal type); first entry wins."""
+
+    lines = text.splitlines()
+    out = {}
+    for i in _services(lines):
+        p = lines[i].split(":")
+        if len(p) >= 5:
+            key = ":".join(p[:4]).lower()
+            if key not in out:
+                try:
+                    out[key] = int(p[4])
+                except ValueError:
+                    out[key] = -1
+    return out
+
+
+def unknown_types(text: str, standin=None) -> dict:
+    """``{type: count}`` of services the importer would mangle and we cannot handle."""
+
+    ok = IMPORTER_TYPES | set(standin or STANDIN_TYPES)
+    out: dict = {}
+    for t in service_types(text).values():
+        if t not in ok:
+            out[t] = out.get(t, 0) + 1
+    return out
+
+
+def substitute_types(text: str, standin=None, numbers=None, only=None) -> Tuple[str, List[str]]:
+    """Write the stand-in type for services the importer cannot keep.
+
+    ``numbers`` (``{key: (type, number)}``, optional) also sets the real type's
+    stand-in and the channel number for those keys — used to repair services
+    that a previous reload already mangled (type 0, number 0).
+    ``only`` limits the change to these keys (used to write the real type back
+    into the box's export after the reload).
+    Returns ``(new_text, keys)`` of the services changed.
+    """
+
+    standin = STANDIN_TYPES if standin is None else standin
+    only = set(only) if only is not None else None
+    lines = text.splitlines(keepends=True)
+    bare = [ln.rstrip("\r\n") for ln in lines]
+    keys = []
+    for i in _services(bare):
+        p = bare[i].split(":")
+        if len(p) < 6:
+            continue
+        key = ":".join(p[:4]).lower()
+        if only is not None and key not in only:
+            continue
+        try:
+            t = int(p[4])
+        except ValueError:
+            continue
+        if numbers and key in numbers:
+            real, num = numbers[key]
+            p[4], p[5] = str(standin.get(real, real)), str(num)
+        elif t in standin:
+            p[4] = str(standin[t])
+        else:
+            continue
+        lines[i] = ":".join(p) + lines[i][len(bare[i]):]
+        keys.append(key)
+    return "".join(lines), keys
+
+
+def substitute_bouquet_types(text: str, keys, standin=None) -> Tuple[str, int]:
+    """In ``#SERVICE 1:0:TYPE:SID:TSID:ONID:NS:…`` lines of ``keys``, write the stand-in type (hex)."""
+
+    standin = STANDIN_TYPES if standin is None else standin
+    want = set()
+    for k in keys:
+        sid, ns, tsid, onid = k.split(":")
+        want.add((int(sid, 16), int(ns, 16), int(tsid, 16), int(onid, 16)))
+    lines = text.splitlines(keepends=True)
+    n = 0
+    for i, raw in enumerate(lines):
+        line = raw.rstrip("\r\n")
+        if not line.startswith("#SERVICE "):
+            continue
+        ref = line[len("#SERVICE "):].split(":")
+        try:
+            key = (int(ref[3], 16), int(ref[6], 16), int(ref[4], 16), int(ref[5], 16))
+            t = int(ref[2], 16)
+        except (IndexError, ValueError):
+            continue
+        if key in want and t in standin:
+            ref[2] = f"{standin[t]:X}"
+            lines[i] = "#SERVICE " + ":".join(ref) + raw[len(line):]
+            n += 1
+    return "".join(lines), n
+
+
+def bouquet_refs(text: str) -> List[str]:
+    """The ``#SERVICE`` lines of a bouquet, normalised (upper-case, no line ends)."""
+
+    return [ln.strip().upper() for ln in text.splitlines() if ln.strip().startswith("#SERVICE")]

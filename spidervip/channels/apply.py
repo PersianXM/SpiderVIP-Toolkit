@@ -92,6 +92,7 @@ class SafeApplyPipeline:
         self._reloaded = False
         snapshot_path: Optional[Path] = None
         receiver_snap: Optional[str] = None
+        guard = None
         expected = self.manager.list_favorites()
         try:
             self._set(OperationStatus.LOADING, "Connecting and reading receiver state", on_status)
@@ -186,6 +187,10 @@ class SafeApplyPipeline:
 
             # servicelistreload sets every satellite's Motor type to Off: remember it now.
             self._read_motor(on_status)
+            # ...and turns HEVC HD services (type 31) into radio entries: guard them.
+            guard = self._hd_guard_prepare(on_status)
+            if guard is not None:
+                staged = guard.standin_texts(staged)
 
             self._set(OperationStatus.UPLOADING, "Uploading bouquet files to receiver enigma_db", on_status)
             self.receiver.push_bouquet_files(staged, staging=True)
@@ -210,8 +215,22 @@ class SafeApplyPipeline:
             except Exception:
                 # Put the previous exports back (no reload); live_prog untouched.
                 self._restore_exports_quietly(live_files)
+                if guard is not None:
+                    guard.undo_standin()
                 raise
             time.sleep(2.0)
+
+            if guard is not None:
+                self._set(OperationStatus.APPLYING, "Restoring HEVC HD service types in live_prog", on_status)
+                try:
+                    restored_hd = guard.restore(
+                        lambda: self._wait_for_post_boot_settle(timeout=60.0, stable_for=6.0))
+                except Exception as exc:
+                    self._steps.append(f"hd_restore_failed: {exc}")
+                    return self._rollback(receiver_snap, before_favorites, snapshot_path, on_status,
+                                          message=f"HD channels would have been lost by the commit: {exc}")
+                if restored_hd:
+                    self._steps.append(f"hd_restored: {len(restored_hd)} HEVC HD service(s) kept as TV")
 
             self._set(OperationStatus.VERIFYING, "Verifying favorites after live_prog commit", on_status)
             ok = self._verify_stable(expected, attempts=2, gap=2.0)
@@ -227,8 +246,9 @@ class SafeApplyPipeline:
                 )
 
             keeper = self._keeper
-            force = bool(keeper is not None and keeper.saved)
-            if force:
+            hd_force = bool(guard is not None and guard.needs_forced_reboot)
+            force = bool(keeper is not None and keeper.saved) or hd_force
+            if keeper is not None and keeper.saved:
                 self._restore_motor(on_status)
 
             if reboot or force:
@@ -259,6 +279,15 @@ class SafeApplyPipeline:
                 self._wait_for_post_boot_settle()
                 if keeper is not None and keeper.patched:
                     self._verify_motor(on_status)
+                if guard is not None:
+                    try:
+                        lost_hd = guard.verify()
+                    except Exception as exc:
+                        lost_hd = [f"live_prog unreadable: {exc}"]
+                    if lost_hd:
+                        self._steps.append("hd_verify: not TV after reboot: " + ", ".join(lost_hd[:8]))
+                        return self._rollback(receiver_snap, before_favorites, snapshot_path, on_status,
+                                              message="HD channels were not kept as TV after reboot.")
                 self._set(OperationStatus.VERIFYING, "Verifying favorites after reboot", on_status)
                 ok = self._verify_stable(expected)
                 if not ok:
@@ -290,6 +319,8 @@ class SafeApplyPipeline:
             self._set(OperationStatus.COMPLETED, report.message, on_status)
             return report
         except Exception as exc:
+            if guard is not None and not self._reloaded:
+                guard.undo_standin()
             message = str(exc)
             if receiver_snap and receiver_snap not in message:
                 message += (
@@ -511,6 +542,36 @@ class SafeApplyPipeline:
                 prune()
             except Exception:
                 pass
+
+    # --- HEVC HD services across servicelistreload ---------------------------
+    def _hd_guard_prepare(self, on_status: Optional[StatusCallback]):
+        """Check lamedb, write the stand-in type (see ``frequency/hd_guard.py``).
+
+        Returns ``None`` for backends without file access (simulator). Raises
+        (Apply refused, nothing written) for service types the box would mangle.
+        """
+
+        if not supported(self.receiver):
+            return None
+        from spidervip.frequency.hd_guard import HdGuard
+
+        self._set(OperationStatus.PREPARING, "Checking HEVC HD services (type 31) in lamedb", on_status)
+        guard = HdGuard(self.receiver, sleep=time.sleep)
+        try:
+            from spidervip.frequency.deploy import LAMEDB, BoxFiles
+
+            BoxFiles(self.receiver).read(LAMEDB)
+        except Exception as exc:  # no lamedb to read: nothing the importer could mangle
+            self._steps.append(f"hd_guard: skipped (lamedb not readable: {exc})")
+            return None
+        keys = guard.check()  # raises for unknown types or an unreadable live_prog with HD services
+        if not keys:
+            return None
+        # Bouquets are uploaded by Apply itself (stand-in applied to the staged files).
+        guard.write_standin(bouquets_on_box=False)
+        if keys:
+            self._steps.append(f"hd_guard: {len(keys)} HEVC HD service(s) written as type 25 for the commit")
+        return guard
 
     # --- Motor/USALS across servicelistreload ------------------------------
     def _read_motor(self, on_status: Optional[StatusCallback]) -> None:
