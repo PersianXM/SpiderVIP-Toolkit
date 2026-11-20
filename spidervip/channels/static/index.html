@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>SpiderVIP · Channel & Favorite Manager</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top" aria-label="SpiderVIP Channels">
+      <span class="geo geo-cube" aria-hidden="true"></span>
+      <span class="geo geo-dot" aria-hidden="true"></span>
+      <div class="brand">
+        <span class="mark">SV</span>
+        <div>
+          <h1>Channel & Favorite Manager</h1>
+          <p class="sub">Edit locally · Backup safely · Apply after reboot</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="connStatus" class="conn-status offline" title="Checking receiver connection…">
+          <span class="conn-dot" aria-hidden="true"></span>
+        </span>
+        <button id="btnPull" class="ghost" title="Pull from receiver">Pull</button>
+        <button id="btnApply" class="primary" title="Upload favorites and reboot">Apply to Receiver</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+
+    <main class="grid">
+      <section class="panel" id="channelsPanel">
+        <div class="panel-head">
+          <h2>Channels</h2>
+          <span id="channelCount" class="muted"></span>
+        </div>
+        <div class="filters">
+          <input id="search" type="search" placeholder="Search name, number, satellite…" />
+          <select id="satFilter"><option value="">All satellites</option></select>
+          <select id="hdFilter">
+            <option value="1" selected>HD only</option>
+            <option value="0">SD only</option>
+            <option value="">HD + SD</option>
+          </select>
+        </div>
+        <div class="sort-row ch-multi-row">
+          <button id="btnChSelectAll" class="chip" type="button">Select all</button>
+          <button id="btnChClearSel" class="chip" type="button">Clear</button>
+          <span id="chSelCount" class="muted hint">Multi-select, then drag together to Favorites</span>
+        </div>
+        <div id="channelList" class="scroll list"></div>
+      </section>
+
+      <section class="panel" id="favPanel">
+        <div class="panel-head">
+          <h2>Favorites</h2>
+          <button id="btnNewFav" class="ghost compact">+ New</button>
+        </div>
+        <div id="favTabs" class="tabs"></div>
+        <div class="sort-row">
+          <span class="muted">Order</span>
+          <button data-sort="name" class="chip">Name</button>
+          <button data-sort="number" class="chip">Number</button>
+          <button data-sort="satellite" class="chip">Satellite</button>
+        </div>
+        <div class="sort-row fav-multi-row">
+          <button id="btnFavSelectAll" class="chip" type="button">Select all</button>
+          <button id="btnFavClearSel" class="chip" type="button">Clear</button>
+          <button id="btnFavMoveUp" class="chip" type="button" title="Move selected up">↑ Up</button>
+          <button id="btnFavMoveDown" class="chip" type="button" title="Move selected down">↓ Down</button>
+          <span id="favSelCount" class="muted hint">Multi-select, then move together</span>
+        </div>
+        <div id="favDropZone" class="drop-zone">
+          <div id="favChannels" class="scroll list"></div>
+        </div>
+      </section>
+
+      <section class="panel ops" id="opsPanel">
+        <div class="panel-head"><h2>Operations</h2></div>
+
+        <div class="card-block backup-ops">
+          <h3>Backup &amp; Restore</h3>
+          <p class="muted">Export workspace JSON, or import a previous backup.</p>
+
+          <div class="backup-export">
+            <a id="btnDownloadBackup" class="primary linkbtn" href="/api/backup/download">Download JSON</a>
+          </div>
+
+          <div class="restore-zone">
+            <span class="restore-zone-label">Import backup</span>
+            <label class="file-pick" for="restoreFile">
+              <span class="file-pick-btn ghost linkbtn" aria-hidden="true">Choose JSON…</span>
+              <input id="restoreFile" type="file" accept="application/json,.json" />
+            </label>
+            <div id="restorePreview" class="preview" hidden></div>
+            <button id="btnRestore" class="ghost" disabled>Restore into Workspace</button>
+          </div>
+        </div>
+
+        <div class="card-block">
+          <h3>Online Update</h3>
+          <div id="updateList" class="update-list muted">Loading catalog…</div>
+        </div>
+
+        <div class="card-block">
+          <h3>Apply Status</h3>
+          <div id="applyProgress" class="apply-progress" aria-label="Apply progress" hidden>
+            <div class="apply-progress-track">
+              <span class="apply-seg" data-seg="1" title="Prepare"></span>
+              <span class="apply-seg" data-seg="2" title="Upload"></span>
+              <span class="apply-seg" data-seg="3" title="Commit"></span>
+              <span class="apply-seg" data-seg="4" title="Reboot"></span>
+              <span class="apply-seg" data-seg="5" title="Verify"></span>
+            </div>
+            <div class="apply-progress-labels">
+              <span>Prepare</span>
+              <span>Upload</span>
+              <span>Commit</span>
+              <span>Reboot</span>
+              <span>Verify</span>
+            </div>
+          </div>
+          <div id="applyStatus" class="status-box">Idle</div>
+          <div id="motorNotice" class="motor-notice" dir="rtl" hidden></div>
+          <ol id="applySteps" class="steps"></ol>
+          <div class="rollback-block">
+            <h4>Rollback (whole live_prog snapshot)</h4>
+            <p class="muted hint">Each Apply copies the whole <code>live_prog</code> + <code>enigma_db</code>
+              on the receiver first. Rollback copies one back and force-reboots.</p>
+            <div class="row">
+              <select id="snapshotSelect" aria-label="Receiver snapshot"><option value="">— load snapshots —</option></select>
+              <button id="btnLoadSnapshots" class="ghost compact" type="button">Load</button>
+              <button id="btnRollback" class="ghost compact" type="button" disabled>Rollback</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-body">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmText"></p>
+      <div class="row end">
+        <button value="cancel" class="ghost">Cancel</button>
+        <button value="ok" class="primary" id="confirmOk">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="app-version" id="appVersion" title="SpiderVIP Toolkit">v__SPIDERVIP_VERSION__</div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

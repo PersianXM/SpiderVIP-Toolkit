@@ -1,11 +1,12 @@
 # نمای کلی فنی و فهرست شواهد پروژه
 
 **آخرین بازبینی:** 2026-08-07
-**مخزن:** `PersianXM/SpiderVIP-Firmware-Patch`
+**مخزن:** `PersianXM/SpiderVIP-Toolkit`
 
 این سند نقطهٔ ورود مستندات پروژه است. هدف آن تفکیک حقایق اندازه‌گیری‌شده از
 استنباط‌ها، معرفی اجزای مخزن و جلوگیری از انتشار artifactهای حجیم یا اختصاصی
-در Git است.
+در Git است. برای نقشهٔ موضوعات محصول (فریز، کانال، فرکانس) ببینید
+[`TOPICS.md`](TOPICS.md).
 
 ## ۱. دامنه و منبع داده‌ها
 
@@ -115,8 +116,6 @@ patchهای متناظر:
 
 - `patches/usr/bin/bianbiang.sh`
 - `patches/etc/sysctl.conf`
-- `patches/usr/bin/gadgetctl.sh`
-- `patches/usr/local/gadgetd/gadget_fsm.py`
 - `patches/usr/local/dbgbar/`
 
 نتیجهٔ استقرار مستقیم در 2026-07-10:
@@ -129,17 +128,35 @@ patchهای متناظر:
 این نتیجه، موفقیت **استقرار مستقیم فایل‌ها** را تأیید می‌کند و به معنی
 تأیید امن‌بودن flash کامل `.mupg` بازسازی‌شده نیست.
 
+برای پورت همین پچ‌ها و forensic به **نسخهٔ بالاتر فریمور** بعد از ارتقا، چک‌لیست و
+درس‌های عملی در
+[`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md) است.
+
 ## ۵. ساختار قابل انتشار مخزن
+
+موضوعات محصول (فریز، کانال/Favorite، فرکانس) به‌صورت **پوشه روی `main`**
+سازمان‌دهی می‌شوند، نه به‌صورت شاخهٔ دائمی. نقشهٔ کامل در
+[`TOPICS.md`](TOPICS.md) است.
 
 ### `docs/`
 
-منبع اصلی دانش پروژه:
+منبع اصلی دانش مشترک پروژه:
 
 - ساختار فریمویر و شواهد زنده؛
 - ممیزی پایداری و نتایج deployment؛
 - معماری scan و persistence فرکانس‌ها؛
 - تحلیل freeze، USB gadget، IRQ و pipeline صوت/تصویر؛
-- snapshotهای متنی جدول پارتیشن و ماهواره‌ها.
+- snapshotهای متنی جدول پارتیشن و ماهواره‌ها؛
+- ایندکس موضوعی: `docs/freeze/`، `docs/channels/`، `docs/frequency/`، `docs/console/`، و `TOPICS.md`.
+
+### `spidervip/`
+
+بستهٔ عملیاتی چندموضوعی:
+
+- `spidervip/freeze/` — تشخیص/تعمیر فریز A/V؛
+- `spidervip/channels/` — مدیریت کانال و Favorite؛
+- `spidervip/frequency/` — به‌روزرسانی فرکانس همهٔ ماهواره‌ها (منبع OpenPLi/LyngSat)؛
+- `spidervip/console/` — پوستهٔ واحد **SpiderVIP Console** (فاز ۱).
 
 ### `patches/`
 
@@ -155,8 +172,8 @@ patchهای متناظر:
 - `build_custom_mupg.py`, `verify_custom.py`
 - `probe_checksum*.py`, `crack_checksum.py`
 - `telnet_probe.py`, `telnet_run.py` و ابزارهای deployment
-- scraper و generator داده‌های transponder
-- تست‌های `test_lyngsat_parse.py` و `test_gadget_fsm.py`
+- `freeze_state.py` (عکس لحظه فریز)، `blackbox_record.py` (ضبط مداوم)، `deploy_audio_watch.py` + `audio_watch.sh` (نگهبان فریز روی رسیور)
+- `extract_satellites.py` (گزارش ماهواره/TP از firmware)
 
 برخی ابزارها محصول تحقیق تعاملی‌اند و ممکن است نام فایل، IP یا مسیر پیش‌فرض
 داشته باشند. اجرای آن‌ها باید پس از بازبینی ورودی‌ها انجام شود.
@@ -184,17 +201,12 @@ patchهای متناظر:
 
 ## ۶. بازتولید و اعتبارسنجی
 
-پیش‌نیاز عمومی: Python 3. برای scraper:
+پیش‌نیاز عمومی: Python 3. برای کنسول و به‌روزرسانی فرکانس: `python -m pip install flask`.
+
+تست‌ها:
 
 ```powershell
-python -m pip install requests beautifulsoup4
-```
-
-تست‌های مستقل:
-
-```powershell
-python tools/test_lyngsat_parse.py
-python tools/test_gadget_fsm.py
+python -m pytest -q
 ```
 
 workflow تحلیل offline، پس از قراردادن قانونی image در workspace محلی:
@@ -239,15 +251,12 @@ runtime و anti-brick را تضمین نمی‌کند.
 | `LIVE_DEVICE_FACTS.md` | حقایق `/proc` و block device زنده |
 | `STABILITY_AUDIT.md` | یافته‌ها و اولویت‌های پایداری |
 | `DEPLOYMENT_RESULT.md` | تغییرات و تأیید پس از reboot |
-| `NETWORK_ACCESS_GUIDE.md` | روش مشاهدهٔ امن‌تر و read-only |
+| `NETWORK_ACCESS_GUIDE.md` | Telnet زنده، IP/پورت‌ها، ابزارهای `telnet_*.py` |
+| `FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md` | کار بعد از ارتقای فریمور یا ریست کارخانه |
+| `troubleshooting-fa.md` / `troubleshooting-en.md` | فریز A/V، جدول علت‌ها، بازیابی |
+| `freeze/AUDIO_FREEZE_2026-11.md` | علت تأییدشده فریز (قفل درایور صدا) و نگهبان خودکار |
 | `SCAN_ARCHITECTURE_REPORT.md` | جریان کامل scan و database |
 | `TRANSPONDER_PERSISTENCE_ROOTCAUSE.md` | persistence و WebIF |
-| `GADGET_SERVICE_ROOTCAUSE.md` | علت ریشه‌ای سرویس USB gadget |
-| `GADGET_LIFECYCLE_DESIGN.md` | طراحی lifecycle |
-| `LAZY_GADGET_DESIGN.md` | طراحی lazy activation |
-| `FREEZE_INCIDENT_2026-07-11.md` | رخداد freeze |
-| `FREEZE_INCIDENT_GADGET_TEST_2026-07-11.md` | آزمون تکمیلی gadget |
-| `EXECUTION_TRACE_IRQ_TO_LOG.md` | trace از IRQ تا log |
 | `AV_PIPELINE_MAP.md` | pipeline صوت و تصویر |
 | `DEBUG_STATUS_BAR.md` | معماری و deployment نوار debug |
 

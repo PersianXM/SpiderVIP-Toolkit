@@ -35,3 +35,10 @@ cp /data/sysctl.conf.bak  /etc/sysctl.conf
 dd if=/data/deviceinfo_p6.bak of=/dev/mmcblk0p6 bs=1M
 sync && reboot
 ```
+
+## بعد از ارتقای فریمور vendor
+
+اگر دستگاه بعداً به نسخهٔ بالاتر ارتقا یافت، این نتیجه به‌تنهایی کافی نیست؛ پچ‌ها
+ممکن است بازنویسی شوند. چک‌لیست پورت و forensic:
+
+- [`FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md`](FIRMWARE_UPGRADE_PATCH_PLAYBOOK.md)

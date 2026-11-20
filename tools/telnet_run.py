@@ -7,6 +7,7 @@ starting with '#' are skipped). Prints each command's output. ASCII-safe.
 
 Usage:  python telnet_run.py <commands_file>
 """
+import ctypes
 import socket, time, sys
 
 HOST = "192.168.100.102"
@@ -32,8 +33,6 @@ def recv_until(sock, markers, timeout=8):
                 if m in buf:
                     return buf
             continue
-        except Exception:
-            break
     return buf
 
 def strip_iac(sock, data):
@@ -57,19 +56,70 @@ def strip_iac(sock, data):
         except Exception: pass
     return bytes(clean)
 
+def _same_slash24(a: str, b: str) -> bool:
+    ap, bp = a.split("."), b.split(".")
+    return len(ap) == 4 and len(bp) == 4 and ap[:3] == bp[:3]
+
+
+def _route_local_ip(host: str) -> str:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((host, PORT))
+        return s.getsockname()[0]
+    finally:
+        s.close()
+
+
+def _arp_mac(host: str) -> str | None:
+    if sys.platform != "win32":
+        return None
+    dest = ctypes.windll.ws2_32.inet_addr(host.encode("ascii"))
+    mac = ctypes.create_string_buffer(8)
+    maclen = ctypes.c_ulong(6)
+    ret = ctypes.windll.Iphlpapi.SendARP(dest, 0, mac, ctypes.byref(maclen))
+    raw = mac.raw[:6]
+    if ret != 0 or maclen.value < 6 or raw == b"\x00" * 6:
+        return None
+    return raw.hex()
+
+
+def _preflight(host: str) -> None:
+    """Fail fast when a VPN/TUN steals the LAN route, or HOST is not on L2."""
+    try:
+        via = _route_local_ip(host)
+    except Exception:
+        via = ""
+    if via and not _same_slash24(via, host):
+        raise RuntimeError("VPN/TUN route via %s (disable tunnel)" % via)
+    if sys.platform == "win32" and not _arp_mac(host):
+        raise RuntimeError("not on LAN (no ARP)")
+
+
 def login():
+    _preflight(HOST)
     s = socket.create_connection((HOST, PORT), timeout=10)
-    d = recv_until(s, [b"login:", b"ogin:"], 8); strip_iac(s, d)
-    s.sendall(USER.encode()+b"\r\n")
-    d = recv_until(s, [b"assword:"], 6); strip_iac(s, d)
-    s.sendall(PASS.encode()+b"\r\n")
-    d = recv_until(s, [b"# ", b"#\r", b"~#", b"incorrect"], 8)
-    txt = d.decode(errors="replace")
-    if "incorrect" in txt.lower():
-        raise RuntimeError("login incorrect")
-    s.sendall(b"export PS1='PROMPT> '\r\n")
-    recv_until(s, [b"PROMPT> "], 5)
-    return s
+    try:
+        d = recv_until(s, [b"login:", b"ogin:"], 8); strip_iac(s, d)
+        if b"ogin:" not in d:
+            raise RuntimeError("no telnet login banner (slots full?)")
+        s.sendall(USER.encode()+b"\r\n")
+        d = recv_until(s, [b"assword:"], 6); strip_iac(s, d)
+        if b"assword:" not in d:
+            raise RuntimeError("no telnet password prompt")
+        s.sendall(PASS.encode()+b"\r\n")
+        d = recv_until(s, [b"# ", b"#\r", b"~#", b"incorrect"], 8)
+        txt = d.decode(errors="replace")
+        if "incorrect" in txt.lower():
+            raise RuntimeError("login incorrect")
+        s.sendall(b"export PS1='PROMPT> '\r\n")
+        recv_until(s, [b"PROMPT> "], 5)
+        return s
+    except Exception:
+        try:
+            s.close()
+        except Exception:
+            pass
+        raise
 
 def run(s, cmd, idx, timeout=180):
     # marker whose command-echo differs from its stdout, so the echoed

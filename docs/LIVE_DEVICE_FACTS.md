@@ -2,6 +2,10 @@
 
 اتصال موفق: `telnet 192.168.100.102`  →  کاربر `root` / رمز `root`  →  پرامپت `root@clap4k:~#`
 
+روش کامل وصل شدن، تست پورت‌ها و ابزارهای `tools/telnet_*.py` در
+[`NETWORK_ACCESS_GUIDE.md`](NETWORK_ACCESS_GUIDE.md) است.
+آخرین تأیید زندهٔ شبکه: **۲۰۲۶-۰۸-۰۷** — ping OK، Telnet:23 باز، SSH:22 بسته، IP روی `wlan0`.
+
 ## 🔑 رم واقعی دستگاه (پاسخ قطعی)
 - **رم فیزیکی نصب‌شده = ۱ گیگابایت (1GB DDR)** — تأیید‌شده از:
   - `/proc/cmdline` → `mem=1G`

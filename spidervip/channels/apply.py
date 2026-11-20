@@ -1,0 +1,796 @@
+"""Safe favorite apply pipeline: snapshot → stage → commit to live_prog → verify.
+
+``/data/gx/live_prog`` is LZ-compressed, so this module never edits it
+byte-wise. It takes a whole-file snapshot (``live_prog`` + ``enigma_db``) on
+the box before the first write, and rollback copies that whole snapshot back
+followed by a forced reboot — the same model as ``spidervip/frequency/deploy.py``.
+
+``servicelistreload`` sets every satellite's Motor type to Off. Apply reads the
+Motor map from ``live_prog`` before the reload, writes it back into the
+post-reload ``live_prog`` (whole file, unpack → patch → pack, md5-checked),
+force-reboots and verifies it after boot — see ``motor_restore.py``. If that
+does not finish, the notice lists the satellites to set back by hand.
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
+
+from .bouquets import favorites_to_bouquet_files, parse_bouquet_files
+from .manager import FavoriteManager
+from .model import ApplyReport, FavoriteList, OperationStatus
+from .motor_restore import MotorKeeper, describe, fallback_note, success_note, supported
+from .receiver import ChannelReceiver
+
+StatusCallback = Callable[[OperationStatus, str], None]
+
+ROLLBACK_MOTOR_NOTE = (
+    "کل live_prog از snapshot برگشت و رسیور با reboot -f بالا آمد، پس تنظیم "
+    "Motor/USALS همان است که هنگام گرفتن آن snapshot بود (Apply آن را پیش از "
+    "servicelistreload می‌گیرد). اگر در منوی آنتن/موتور ماهواره‌ای Off بود، همان‌جا "
+    "دوباره USALS کنید."
+)
+
+
+class ApplyBusyError(RuntimeError):
+    """Raised when a sensitive apply operation is already running."""
+
+
+class SafeApplyPipeline:
+    """Upload favorites and commit them into the receiver master DB (``live_prog``)."""
+
+    def __init__(
+        self,
+        manager: FavoriteManager,
+        receiver: ChannelReceiver,
+        *,
+        snapshot_dir: Optional[Path] = None,
+    ):
+        self.manager = manager
+        self.receiver = receiver
+        self.snapshot_dir = Path(snapshot_dir or manager.workspace_dir / "receiver_snapshots")
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._status = OperationStatus.IDLE
+        self._message = ""
+        self._steps: List[str] = []
+        self._keeper: Optional[MotorKeeper] = None
+        self._reloaded = False
+
+    @property
+    def status(self) -> Dict[str, object]:
+        return {
+            "status": self._status.value,
+            "message": self._message,
+            "steps": list(self._steps),
+        }
+
+    def _set(self, status: OperationStatus, message: str, cb: Optional[StatusCallback]) -> None:
+        self._status = status
+        self._message = message
+        self._steps.append(f"{status.value}: {message}")
+        if cb:
+            cb(status, message)
+
+    def apply(self, *, reboot: bool = True, on_status: Optional[StatusCallback] = None) -> ApplyReport:
+        """Snapshot → upload → commit → verify → reboot → verify (whole-file rollback on failure).
+
+        ``live_prog`` is LZ-compressed, so it is never edited byte-wise: the
+        only writes to it are the firmware's own ``servicelistreload`` commit
+        and, on rollback, copying a whole snapshot back.
+        """
+
+        if not self._lock.acquire(blocking=False):
+            raise ApplyBusyError("Another apply operation is already in progress.")
+        self._steps = []
+        self._keeper = None
+        self._reloaded = False
+        snapshot_path: Optional[Path] = None
+        receiver_snap: Optional[str] = None
+        guard = None
+        expected = self.manager.list_favorites()
+        try:
+            self._set(OperationStatus.LOADING, "Connecting and reading receiver state", on_status)
+            self.receiver.connect()
+            status = self.receiver.get_status()
+            live_files = self.receiver.pull_bouquet_files()
+            channels = self.receiver.pull_channels()
+            before_favorites = parse_bouquet_files(live_files)
+
+            self._set(OperationStatus.PREPARING, "Creating recovery snapshot of current favorites", on_status)
+            snapshot_path = self._write_snapshot(live_files, status)
+
+            self._set(
+                OperationStatus.VALIDATING,
+                "Rematching favorites onto live channel table (by identity, then name)",
+                on_status,
+            )
+            from .lamedb import rematch_favorites_by_name
+
+            name_channels = self.manager.name_channels_for_remap()
+            rematched, remap_stats = rematch_favorites_by_name(
+                expected,
+                name_channels=name_channels,
+                target_channels=channels,
+            )
+            if remap_stats["name"] or remap_stats["unresolved"] or remap_stats["identity"]:
+                self._steps.append(
+                    "remap: identity={identity} name={name} unresolved={unresolved}".format(
+                        **remap_stats
+                    )
+                )
+            cleaned, skipped = self._drop_unresolved_refs(
+                rematched,
+                live_channels=channels,
+                name_channels=name_channels,
+            )
+            if skipped:
+                sample = ", ".join(skipped[:8])
+                more = f" (+{len(skipped) - 8} more)" if len(skipped) > 8 else ""
+                self._steps.append(
+                    f"remap_skip: dropped {len(skipped)} channel(s) not found on "
+                    f"receiver after rescan: {sample}{more}"
+                )
+            if not any(fav.channel_refs for fav in cleaned):
+                raise ValueError(
+                    "Cannot apply: after rematching onto the live channel table, no "
+                    "favorite channels remain. Usually the backup names were lost — "
+                    "Restore the favorite backup again (names are kept in catalog), "
+                    "Pull from receiver, then Apply. Or rebuild the favorite from "
+                    "the new channel list."
+                )
+            # Keep names for any skipped/old refs before swapping to live table.
+            self.manager.remember_channel_names(name_channels)
+            snap = self.manager.get_snapshot()
+            snap.favorites = cleaned
+            # Prefer live channel table for subsequent local validation/UI.
+            snap.channels = list(channels)
+            snap.source = "apply-remap"
+            self.manager.replace_snapshot(snap)
+            expected = cleaned
+
+            self._set(OperationStatus.VALIDATING, "Validating channel mapping", on_status)
+            self._validate(expected)
+            self._validate_against_live(expected, channels)
+
+            self._set(
+                OperationStatus.PREPARING,
+                "Building bouquet + .simple index files for live_prog commit",
+                on_status,
+            )
+            staged = favorites_to_bouquet_files(
+                expected,
+                channels=channels,
+                live_files=live_files,
+            )
+
+            # Whole-file snapshot of live_prog + enigma_db on the box, taken
+            # right before the first write. No snapshot → no Apply.
+            self._set(
+                OperationStatus.PREPARING,
+                "Taking whole-file snapshot of live_prog + enigma_db on the receiver",
+                on_status,
+            )
+            take = getattr(self.receiver, "snapshot_receiver_db", None)
+            if not callable(take):
+                raise RuntimeError(
+                    "Receiver backend cannot take a whole-file live_prog snapshot "
+                    "(missing snapshot_receiver_db); Apply refused."
+                )
+            receiver_snap = str(take())
+            self._steps.append(f"receiver_snapshot: {receiver_snap} (whole live_prog + enigma_db)")
+
+            # servicelistreload sets every satellite's Motor type to Off: remember it now.
+            self._read_motor(on_status)
+            # ...and turns HEVC HD services (type 31) into radio entries: guard them.
+            guard = self._hd_guard_prepare(on_status)
+            if guard is not None:
+                staged = guard.standin_texts(staged)
+
+            self._set(OperationStatus.UPLOADING, "Uploading bouquet files to receiver enigma_db", on_status)
+            self.receiver.push_bouquet_files(staged, staging=True)
+
+            self._set(OperationStatus.APPLYING, "Activating staged files on receiver", on_status)
+            self.receiver.activate_staged_bouquets()
+
+            self._set(
+                OperationStatus.APPLYING,
+                "Committing favorites into live_prog via WebIF servicelistreload",
+                on_status,
+            )
+            commit = getattr(self.receiver, "commit_service_list", None)
+            if not callable(commit):
+                raise RuntimeError(
+                    "Receiver backend cannot commit service list to live_prog "
+                    "(missing commit_service_list)."
+                )
+            self._reloaded = True
+            try:
+                commit()
+            except Exception:
+                # Put the previous exports back (no reload); live_prog untouched.
+                self._restore_exports_quietly(live_files)
+                if guard is not None:
+                    guard.undo_standin()
+                raise
+            time.sleep(2.0)
+
+            if guard is not None:
+                self._set(OperationStatus.APPLYING, "Restoring HEVC HD service types in live_prog", on_status)
+                try:
+                    restored_hd = guard.restore(
+                        lambda: self._wait_for_post_boot_settle(timeout=60.0, stable_for=6.0))
+                except Exception as exc:
+                    self._steps.append(f"hd_restore_failed: {exc}")
+                    return self._rollback(receiver_snap, before_favorites, snapshot_path, on_status,
+                                          message=f"HD channels would have been lost by the commit: {exc}")
+                if restored_hd:
+                    self._steps.append(f"hd_restored: {len(restored_hd)} HEVC HD service(s) kept as TV")
+
+            self._set(OperationStatus.VERIFYING, "Verifying favorites after live_prog commit", on_status)
+            ok = self._verify_stable(expected, attempts=2, gap=2.0)
+            if not ok:
+                return self._rollback(
+                    receiver_snap,
+                    before_favorites,
+                    snapshot_path,
+                    on_status,
+                    message=(
+                        "Favorites were uploaded but did not match after live_prog commit."
+                    ),
+                )
+
+            keeper = self._keeper
+            hd_force = bool(guard is not None and guard.needs_forced_reboot)
+            force = bool(keeper is not None and keeper.saved) or hd_force
+            if keeper is not None and keeper.saved:
+                self._restore_motor(on_status)
+
+            if reboot or force:
+                if force:
+                    # The patched live_prog only survives a forced reboot: a normal
+                    # shutdown saves the app's in-memory copy (Motor Off) over it.
+                    self._set(
+                        OperationStatus.REBOOTING,
+                        "Force-rebooting receiver so the restored Motor settings are loaded",
+                        on_status,
+                    )
+                    self.receiver.reboot(force=True)
+                else:
+                    self._set(OperationStatus.REBOOTING, "Rebooting receiver to confirm persistence", on_status)
+                    self.receiver.reboot()
+                ready = self.receiver.wait_until_ready()
+                if not ready:
+                    raise RuntimeError(
+                        "Receiver did not become reachable again after reboot. "
+                        f"Manual check required; whole-file snapshot {receiver_snap} "
+                        "is on the receiver for rollback."
+                    )
+                self._set(
+                    OperationStatus.VERIFYING,
+                    "Waiting for channel DB export to settle after reboot",
+                    on_status,
+                )
+                self._wait_for_post_boot_settle()
+                if keeper is not None and keeper.patched:
+                    self._verify_motor(on_status)
+                if guard is not None:
+                    try:
+                        lost_hd = guard.verify()
+                    except Exception as exc:
+                        lost_hd = [f"live_prog unreadable: {exc}"]
+                    if lost_hd:
+                        self._steps.append("hd_verify: not TV after reboot: " + ", ".join(lost_hd[:8]))
+                        return self._rollback(receiver_snap, before_favorites, snapshot_path, on_status,
+                                              message="HD channels were not kept as TV after reboot.")
+                self._set(OperationStatus.VERIFYING, "Verifying favorites after reboot", on_status)
+                ok = self._verify_stable(expected)
+                if not ok:
+                    return self._rollback(
+                        receiver_snap,
+                        before_favorites,
+                        snapshot_path,
+                        on_status,
+                        message="Favorites committed but did not survive reboot verification.",
+                    )
+
+            self._prune_quietly()
+            notice = self._motor_notice()
+            report = ApplyReport(
+                status=OperationStatus.COMPLETED,
+                message=(
+                    "Favorites committed into live_prog"
+                    + (" and verified after reboot." if (reboot or force) else ".")
+                    + self._motor_message()
+                ),
+                steps=list(self._steps),
+                verified=True,
+                rolled_back=False,
+                snapshot_path=str(snapshot_path) if snapshot_path else None,
+                receiver_snapshot=receiver_snap,
+                notice=notice,
+                motor=self._motor_summary(),
+            )
+            self._set(OperationStatus.COMPLETED, report.message, on_status)
+            return report
+        except Exception as exc:
+            if guard is not None and not self._reloaded:
+                guard.undo_standin()
+            message = str(exc)
+            if receiver_snap and receiver_snap not in message:
+                message += (
+                    f" Whole-file snapshot {receiver_snap} is on the receiver; "
+                    "use rollback if the box is not as expected."
+                )
+            report = ApplyReport(
+                status=OperationStatus.FAILED,
+                message=message,
+                steps=list(self._steps),
+                verified=False,
+                rolled_back=False,
+                snapshot_path=str(snapshot_path) if snapshot_path else None,
+                receiver_snapshot=receiver_snap,
+                notice=self._motor_notice() if self._reloaded else "",
+                motor=self._motor_summary(),
+            )
+            self._status = OperationStatus.FAILED
+            self._message = report.message
+            if on_status:
+                on_status(OperationStatus.FAILED, report.message)
+            return report
+        finally:
+            try:
+                self.receiver.close()
+            except Exception:
+                pass
+            self._lock.release()
+
+    # --- rollback ------------------------------------------------------------
+    def list_receiver_snapshots(self) -> List[str]:
+        """Whole-file snapshots on the receiver (newest first)."""
+
+        lister = getattr(self.receiver, "list_receiver_snapshots", None)
+        if not callable(lister):
+            return []
+        if not self._lock.acquire(blocking=False):
+            raise ApplyBusyError("Another apply operation is already in progress.")
+        try:
+            self.receiver.connect()
+            return list(lister())
+        finally:
+            try:
+                self.receiver.close()
+            except Exception:
+                pass
+            self._lock.release()
+
+    def rollback_to_snapshot(
+        self,
+        name: str,
+        *,
+        on_status: Optional[StatusCallback] = None,
+    ) -> ApplyReport:
+        """Manual rollback: put a snapshot's whole ``live_prog`` + ``enigma_db`` back.
+
+        The current state is snapshotted first (``…_before_rollback``), then the
+        box is force-rebooted so the app loads the restored file without
+        writing its in-memory DB back. ``servicelistreload`` is never called.
+        """
+
+        if not self._lock.acquire(blocking=False):
+            raise ApplyBusyError("Another apply operation is already in progress.")
+        self._steps = []
+        try:
+            self._set(OperationStatus.LOADING, "Connecting to receiver for rollback", on_status)
+            self.receiver.connect()
+            names = list(self.receiver.list_receiver_snapshots())
+            if name not in names:
+                raise ValueError(f"Receiver snapshot not found: {name}")
+            self._set(
+                OperationStatus.PREPARING,
+                "Saving current live_prog + enigma_db before rollback",
+                on_status,
+            )
+            pre = str(self.receiver.snapshot_receiver_db("_before_rollback"))
+            self._steps.append(f"receiver_snapshot: {pre} (state before rollback)")
+            self._set(
+                OperationStatus.APPLYING,
+                f"Restoring whole live_prog + enigma_db from {name}",
+                on_status,
+            )
+            self.receiver.restore_receiver_snapshot(name)
+            self._set(OperationStatus.REBOOTING, "Force-rebooting receiver to load restored live_prog", on_status)
+            self.receiver.reboot(force=True)
+            if not self.receiver.wait_until_ready():
+                raise RuntimeError(
+                    "Receiver did not become reachable again after the forced reboot. "
+                    f"Manual check required; pre-rollback state is in {pre}."
+                )
+            self._set(OperationStatus.VERIFYING, "Waiting for channel DB export to settle", on_status)
+            self._wait_for_post_boot_settle()
+            try:
+                self.receiver.prune_receiver_snapshots(keep_also=name)
+            except Exception:
+                pass
+            report = ApplyReport(
+                status=OperationStatus.COMPLETED,
+                message=(
+                    f"Receiver restored from snapshot {name} (whole live_prog). "
+                    f"State before rollback saved as {pre}. Pull from receiver to "
+                    "reload favorites into the workspace."
+                ),
+                steps=list(self._steps),
+                verified=False,
+                rolled_back=True,
+                receiver_snapshot=pre,
+                notice=ROLLBACK_MOTOR_NOTE,
+            )
+            self._set(OperationStatus.COMPLETED, report.message, on_status)
+            return report
+        except Exception as exc:
+            report = ApplyReport(
+                status=OperationStatus.FAILED,
+                message=str(exc),
+                steps=list(self._steps),
+                verified=False,
+                rolled_back=False,
+            )
+            self._status = OperationStatus.FAILED
+            self._message = report.message
+            if on_status:
+                on_status(OperationStatus.FAILED, report.message)
+            return report
+        finally:
+            try:
+                self.receiver.close()
+            except Exception:
+                pass
+            self._lock.release()
+
+    def _rollback(
+        self,
+        receiver_snap: str,
+        before_favorites: List[FavoriteList],
+        snapshot_path: Optional[Path],
+        on_status: Optional[StatusCallback],
+        *,
+        message: str,
+    ) -> ApplyReport:
+        """Automatic rollback after a failed verify: whole-file restore + forced reboot.
+
+        Always force-reboots (even for ``apply(reboot=False)``): the running
+        app keeps the new DB in memory and a clean shutdown could write it
+        back over the restored file. Never calls ``servicelistreload``.
+        """
+
+        self._set(
+            OperationStatus.APPLYING,
+            f"Rolling back: restoring whole live_prog + enigma_db from {receiver_snap}",
+            on_status,
+        )
+        restored = False
+        verified = False
+        try:
+            self.receiver.restore_receiver_snapshot(receiver_snap)
+            restored = True
+            self._set(OperationStatus.REBOOTING, "Force-rebooting receiver to load restored live_prog", on_status)
+            self.receiver.reboot(force=True)
+            if self.receiver.wait_until_ready():
+                self._wait_for_post_boot_settle()
+                verified = bool(self.receiver.verify_favorites(before_favorites))
+                self._steps.append(
+                    "rollback_verify: " + ("favorites match pre-apply state" if verified
+                                           else "favorites differ from pre-apply state")
+                )
+                # The snapshot was taken before the reload, so Motor came back with it.
+                keeper = self._keeper
+                if keeper is not None and keeper.saved:
+                    keeper.patched = True
+                    keeper.error = ""
+                    keeper.restored, keeper.missing = [], []
+                    self._verify_motor(on_status)
+            else:
+                self._steps.append("rollback_verify: receiver not reachable after forced reboot")
+        except Exception as exc:
+            self._steps.append(f"rollback_failed: {exc}")
+        if restored:
+            message += (
+                f" Receiver live_prog was restored whole from {receiver_snap}"
+                + (" and verified." if verified else "; please check the receiver.")
+            )
+        else:
+            message += (
+                f" Automatic rollback did not complete; snapshot {receiver_snap} "
+                "is still on the receiver — use rollback."
+            )
+        report = ApplyReport(
+            status=OperationStatus.FAILED,
+            message=message,
+            steps=list(self._steps),
+            verified=False,
+            rolled_back=restored,
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+            receiver_snapshot=receiver_snap,
+            notice=self._rollback_notice(),
+            motor=self._motor_summary(),
+        )
+        self._status = OperationStatus.FAILED
+        self._message = report.message
+        return report
+
+    def _restore_exports_quietly(self, live_files: Dict[str, str]) -> None:
+        restore_bq = getattr(self.receiver, "restore_bouquet_files", None)
+        if not callable(restore_bq):
+            return
+        try:
+            try:
+                restore_bq(live_files, commit=False)
+            except TypeError:
+                restore_bq(live_files)
+        except Exception:
+            pass
+
+    def _prune_quietly(self) -> None:
+        prune = getattr(self.receiver, "prune_receiver_snapshots", None)
+        if callable(prune):
+            try:
+                prune()
+            except Exception:
+                pass
+
+    # --- HEVC HD services across servicelistreload ---------------------------
+    def _hd_guard_prepare(self, on_status: Optional[StatusCallback]):
+        """Check lamedb, write the stand-in type (see ``frequency/hd_guard.py``).
+
+        Returns ``None`` for backends without file access (simulator). Raises
+        (Apply refused, nothing written) for service types the box would mangle.
+        """
+
+        if not supported(self.receiver):
+            return None
+        from spidervip.frequency.hd_guard import HdGuard
+
+        self._set(OperationStatus.PREPARING, "Checking HEVC HD services (type 31) in lamedb", on_status)
+        guard = HdGuard(self.receiver, sleep=time.sleep)
+        try:
+            from spidervip.frequency.deploy import LAMEDB, BoxFiles
+
+            BoxFiles(self.receiver).read(LAMEDB)
+        except Exception as exc:  # no lamedb to read: nothing the importer could mangle
+            self._steps.append(f"hd_guard: skipped (lamedb not readable: {exc})")
+            return None
+        keys = guard.check()  # raises for unknown types or an unreadable live_prog with HD services
+        if not keys:
+            return None
+        # Bouquets are uploaded by Apply itself (stand-in applied to the staged files).
+        guard.write_standin(bouquets_on_box=False)
+        if keys:
+            self._steps.append(f"hd_guard: {len(keys)} HEVC HD service(s) written as type 25 for the commit")
+        return guard
+
+    # --- Motor/USALS across servicelistreload ------------------------------
+    def _read_motor(self, on_status: Optional[StatusCallback]) -> None:
+        if not supported(self.receiver):
+            self._steps.append("motor: backend has no file access; Motor restore skipped")
+            return
+        keeper = MotorKeeper(self.receiver, sleep=time.sleep)
+        self._keeper = keeper
+        self._set(OperationStatus.PREPARING, "Reading Motor/USALS settings from live_prog", on_status)
+        try:
+            saved = keeper.read()
+        except Exception as exc:  # never block Apply on this; the notice says what to check
+            keeper.error = f"خواندن Motor از live_prog ممکن نشد: {exc}"
+            self._steps.append(f"motor_read_failed: {exc}")
+            return
+        self._steps.append(
+            f"motor_saved: {len(saved)} satellite(s)"
+            + (": " + describe(sorted(saved), saved) if saved else "")
+        )
+
+    def _restore_motor(self, on_status: Optional[StatusCallback]) -> None:
+        keeper = self._keeper
+        assert keeper is not None
+        self._set(
+            OperationStatus.APPLYING,
+            f"Restoring Motor/USALS of {len(keeper.saved)} satellite(s) in live_prog",
+            on_status,
+        )
+        try:
+            restored, missing = keeper.restore(
+                lambda: self._wait_for_post_boot_settle(timeout=60.0, stable_for=6.0)
+            )
+        except Exception as exc:  # BoxFiles.write is atomic; the old file stays
+            keeper.error = f"نوشتن Motor در live_prog ممکن نشد: {exc}"
+            self._steps.append(f"motor_restore_failed: {exc}")
+            return
+        self._steps.append(
+            f"motor_restored: {len(restored)} satellite(s) written back into live_prog"
+            + (f"; not found after reload: {', '.join(missing)}" if missing else "")
+        )
+
+    def _verify_motor(self, on_status: Optional[StatusCallback]) -> None:
+        keeper = self._keeper
+        assert keeper is not None
+        self._set(OperationStatus.VERIFYING, "Verifying Motor/USALS settings after reboot", on_status)
+        try:
+            diff = keeper.verify()
+        except Exception as exc:
+            keeper.verified = False
+            keeper.error = f"تأیید Motor پس از راه‌اندازی ممکن نشد: {exc}"
+            self._steps.append(f"motor_verify_failed: {exc}")
+            return
+        if diff:
+            self._steps.append("motor_verify: differs after reboot: " + ", ".join(diff))
+        else:
+            self._steps.append(f"motor_verify: all {len(keeper.saved)} satellite(s) match")
+
+    def _motor_summary(self) -> Dict[str, object]:
+        return self._keeper.summary() if self._keeper is not None else {}
+
+    def _motor_message(self) -> str:
+        keeper = self._keeper
+        if keeper is None:
+            return " Check the antenna/Motor menu on the receiver."
+        if keeper.verified:
+            if not keeper.saved:
+                return " No satellite had a Motor setting."
+            return f" Motor/USALS of {len(keeper.saved)} satellite(s) restored automatically and verified."
+        return (
+            " Motor/USALS was NOT fully restored — set it back in the antenna/Motor "
+            "menu (see the notice) or roll back."
+        )
+
+    def _motor_notice(self) -> str:
+        from .motor_profile import motor_check_note
+
+        try:
+            profile = self.manager.get_motor_profile()
+        except Exception:
+            profile = None
+        keeper = self._keeper
+        if keeper is None:
+            return motor_check_note(profile)
+        if keeper.verified:
+            return success_note(keeper)
+        return fallback_note(keeper, profile)
+
+    def _rollback_notice(self) -> str:
+        """After an automatic rollback the pre-reload snapshot brought Motor back."""
+
+        keeper = self._keeper
+        if keeper is not None and keeper.saved:
+            if not keeper.verified:
+                return self._motor_notice()
+            return ROLLBACK_MOTOR_NOTE + " تنظیم Motor پس از برگشت هم تأیید شد."
+        return ROLLBACK_MOTOR_NOTE
+
+    def _drop_unresolved_refs(
+        self,
+        favorites: List[FavoriteList],
+        *,
+        live_channels: List,
+        name_channels: List,
+    ) -> tuple:
+        """Keep only refs that exist on the live receiver; return (favorites, skipped labels)."""
+
+        from .lamedb import build_identity_index, resolve_channel
+        from .model import Channel
+
+        live_list = [c for c in live_channels if isinstance(c, Channel)]
+        name_list = [c for c in name_channels if isinstance(c, Channel)]
+        live_by_ref = {c.ref: c for c in live_list}
+        live_by_id = build_identity_index(live_list)
+        name_by_ref = {c.ref: c for c in name_list}
+        name_by_id = build_identity_index(name_list)
+
+        cleaned: List[FavoriteList] = []
+        skipped: List[str] = []
+        for fav in favorites:
+            keep: List[str] = []
+            for ref in fav.channel_refs:
+                if resolve_channel(ref, live_by_ref, live_by_id) is not None:
+                    keep.append(ref)
+                    continue
+                old = resolve_channel(ref, name_by_ref, name_by_id)
+                skipped.append(old.name if old is not None else ref)
+            cleaned.append(FavoriteList(id=fav.id, name=fav.name, channel_refs=keep))
+        return cleaned, skipped
+
+    def _validate(self, favorites: List[FavoriteList]) -> None:
+        from .lamedb import build_identity_index, resolve_channel
+
+        known = self.manager.get_snapshot().channel_map()
+        by_id = build_identity_index(known.values())
+        missing = []
+        for fav in favorites:
+            for ref in fav.channel_refs:
+                if resolve_channel(ref, known, by_id) is None:
+                    missing.append(ref)
+        if missing:
+            sample = ", ".join(missing[:5])
+            raise ValueError(
+                f"Cannot apply: {len(missing)} favorite channel(s) are missing from "
+                f"the local channel list (e.g. {sample}). Pull channels from the "
+                f"receiver or restore a complete backup first."
+            )
+
+    def _validate_against_live(
+        self,
+        favorites: List[FavoriteList],
+        live_channels: List,
+    ) -> None:
+        """``.simple`` indices must resolve against the live receiver lamedb."""
+
+        from .lamedb import build_identity_index, resolve_channel, service_identity
+        from .model import Channel
+
+        live_list = [c for c in live_channels if isinstance(c, Channel)]
+        live_by_ref = {c.ref: c for c in live_list}
+        live_by_id = build_identity_index(live_list)
+        problems: List[str] = []
+        for fav in favorites:
+            missing_names: List[str] = []
+            seen = set()
+            for ref in fav.channel_refs:
+                key = service_identity(ref)
+                if key is not None and key in seen:
+                    continue
+                if key is not None:
+                    seen.add(key)
+                if resolve_channel(ref, live_by_ref, live_by_id) is not None:
+                    continue
+                ws = self.manager.find_channel(ref)
+                missing_names.append(ws.name if ws is not None else ref)
+            if missing_names:
+                sample = ", ".join(missing_names[:5])
+                more = f" (+{len(missing_names) - 5} more)" if len(missing_names) > 5 else ""
+                problems.append(
+                    f"favorite '{fav.name}': {len(missing_names)} missing on receiver "
+                    f"(e.g. {sample}{more})"
+                )
+        if problems:
+            detail = "; ".join(problems[:3])
+            raise ValueError(
+                f"Cannot build .simple indices — channels in the workspace favorite "
+                f"are not in the live receiver channel table. {detail}. "
+                f"Usually after a frequency/TP change: Pull from receiver, remove "
+                f"channels marked unresolved from the favorite, then Apply again."
+            )
+
+    def _wait_for_post_boot_settle(self, *, timeout: float = 90.0, stable_for: float = 6.0) -> None:
+        wait = getattr(self.receiver, "wait_for_channel_db_settle", None)
+        if callable(wait):
+            wait(timeout=timeout, stable_for=stable_for)
+            return
+        time.sleep(min(12.0, timeout))
+
+    def _verify_stable(
+        self,
+        expected: List[FavoriteList],
+        *,
+        attempts: int = 3,
+        gap: float = 3.0,
+    ) -> bool:
+        results = []
+        for i in range(max(1, attempts)):
+            ok = bool(self.receiver.verify_favorites(expected))
+            results.append(ok)
+            if i + 1 < attempts:
+                time.sleep(gap)
+        return all(results)
+
+    def _write_snapshot(self, files: Dict[str, str], status: Dict[str, str]) -> Path:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        path = self.snapshot_dir / f"receiver-bouquets-{stamp}.json"
+        payload = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "files": files,
+        }
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        return path

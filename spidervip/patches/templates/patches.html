@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>وصلهٔ رسیور — SpiderVIP</title>
+  <link rel="stylesheet" href="/static/console/theme.css" />
+  <link rel="stylesheet" href="/static/patches.css" />
+</head>
+<body>
+  <div class="pt-shell">
+    <header class="pt-topbar" aria-label="نوار بالا">
+      <a class="pt-back" href="/" title="بازگشت به کنسول">→ کنسول</a>
+      <div class="pt-brand">
+        <span class="pt-mark" aria-hidden="true">PT</span>
+        <div>
+          <strong>وصلهٔ رسیور</strong>
+          <span>نصب و حذف افزونه‌های روی رسیور با یک دکمه</span>
+        </div>
+      </div>
+      <span id="connLabel" class="pt-pill">اتصال: —</span>
+    </header>
+
+    <section class="pt-hero">
+      <div>
+        <p class="pt-eyebrow">Receiver patches</p>
+        <h1>وصله‌های رسیور</h1>
+        <p class="pt-lede">این وصله‌ها روی حافظهٔ رسیور (<span class="ltr">/data</span>) نصب می‌شوند و هنگام هر روشن شدن خودکار اجرا می‌شوند.
+          <b>به‌روزرسانی firmware یا Reset to Factory آن‌ها را پاک می‌کند</b> — بعد از آن، همین‌جا وضعیت را ببینید و دوباره «نصب» را بزنید.</p>
+      </div>
+      <div class="pt-hero-art" aria-hidden="true">
+        <span class="geo geo-cube geo-rot-12 geo-anim-float geo-hide-mobile" style="top:8px;left:12%;"></span>
+        <span class="geo geo-circle geo-anim-drift" style="bottom:12px;left:42%;background:var(--color-orange);"></span>
+      </div>
+    </section>
+
+    <div id="standaloneConn" class="pt-conn" hidden>
+      <label><span>IP رسیور</span><input id="cHost" class="ltr" type="text" autocomplete="off" /></label>
+      <label><span>کاربر</span><input id="cUser" class="ltr" type="text" value="root" /></label>
+      <label><span>رمز</span><input id="cPass" class="ltr" type="password" value="root" /></label>
+    </div>
+    <div class="pt-actions">
+      <button id="btnRefresh" class="pt-btn pt-btn-primary" type="button">خواندن وضعیت از رسیور</button>
+      <span id="statusMeta" class="pt-meta"></span>
+    </div>
+
+    <section id="cards" class="pt-cards" aria-live="polite"></section>
+
+    <p id="toast" class="pt-toast" role="status" hidden></p>
+  </div>
+  <div class="app-version" id="appVersion" title="SpiderVIP Toolkit">v{{ app_version }}</div>
+  <script src="/static/patches.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Core toolkit (diagnostics, patch engine, simulator, CLI) has no runtime deps.
+# The online SSH backend and the test suite need the extras below.
+paramiko>=3.0
+pytest>=7.0
